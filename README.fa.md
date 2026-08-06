@@ -43,14 +43,23 @@ bash <(curl -fsSL https://raw.githubusercontent.com/lalash/srvmon/main/scripts/i
 ```
 ? How should the dashboard be served?
   1. HTTPS with a free Let's Encrypt certificate for a domain (auto-renews)
-  2. HTTPS with certificate files you already have
-  3. Plain HTTP — only safe behind a reverse proxy or on a private network
+  2. HTTPS for this server's IP address — no domain needed (~6-day cert, auto-renews)
+  3. HTTPS with certificate files you already have
+  4. Plain HTTP — only safe behind a reverse proxy or on a private network
 ? Choose [1]: 1
 ? Domain name (e.g. monitor.example.com): monitor.example.com
 ? Port for the dashboard [443]:
 ? Set the admin password yourself? (otherwise one is generated) [y/N]:
 ? ufw is active — open port 443? [Y/n]:
 ```
+
+<div dir="rtl">
+
+دامنه ندارید؟ گزینه **۲** را بزنید. Let's Encrypt برای آی‌پی خالی هم گواهی
+صادر می‌کند (پروفایل کوتاه‌مدت)، پس HTTPS واقعی بدون اخطار مرورگر می‌گیرید
+بدون اینکه لازم باشد دامنه بخرید.
+
+</div>
 
 <div dir="rtl">
 
@@ -103,8 +112,9 @@ systemd و باز کردن پورت در فایروال. در اولین اجر�
 | گزینه | پیش‌فرض | کاربرد |
 | --- | --- | --- |
 | `--port N` | با SSL برابر ۴۴۳، وگرنه ۸۰۸۰ | پورتی که داشبورد روی آن اجرا می‌شود |
-| `--ssl domain\|files\|none` | پرسیده می‌شود | نوع گواهی |
+| `--ssl domain\|ip\|files\|none` | پرسیده می‌شود | نوع گواهی |
 | `--domain NAME` | پرسیده می‌شود | دامنه برای حالت `domain` |
+| `--server-ip ADDR` | تشخیص خودکار | آی‌پی عمومی برای حالت `ip` |
 | `--cert` / `--key` | پرسیده می‌شود | مسیر فایل‌ها برای حالت `files` |
 | `--acme-port N` | `80` | پورتی که acme.sh هنگام اعتبارسنجی می‌گیرد |
 | `--admin-user` | `admin` | نام کاربر اول |
@@ -140,11 +150,15 @@ bash install-hub.sh --ssl domain --domain monitor.example.com --port 443 --admin
 
 ### گواهی SSL
 
-اگر گزینه Let's Encrypt را انتخاب کنید، `acme.sh` نصب می‌شود، بررسی می‌شود که
-رکورد A دامنه واقعاً به همین سرور اشاره کند، گواهی با روش HTTP-01 روی پورت ۸۰
-گرفته می‌شود (حالت standalone، پس نیازی به وب‌سرور نیست) و یک hook تمدید ثبت
-می‌شود که گواهی تازه را در `/etc/srvmon/cert/` کپی می‌کند و hub را ری‌استارت
-می‌کند. از آن به بعد تمدید کاملاً خودکار است.
+اگر گزینه **Let's Encrypt برای دامنه** را انتخاب کنید، `acme.sh` نصب می‌شود،
+بررسی می‌شود که رکورد A دامنه واقعاً به همین سرور اشاره کند، گواهی با روش
+HTTP-01 روی پورت ۸۰ گرفته می‌شود (حالت standalone، پس نیازی به وب‌سرور نیست) و
+یک hook تمدید ثبت می‌شود که گواهی تازه را در `/etc/srvmon/cert/` کپی می‌کند و
+hub را ری‌استارت می‌کند. از آن به بعد تمدید کاملاً خودکار است.
+
+گزینه **Let's Encrypt برای آی‌پی** دقیقاً همین مسیر را می‌رود ولی اصلاً دامنه
+لازم ندارد. این گواهی‌ها از پروفایل کوتاه‌مدت استفاده می‌کنند و حدود شش روز
+اعتبار دارند، پس hook تمدید واقعاً کار می‌کند — با همان cron خودکار acme.sh.
 
 پورت ۸۰ باید هم موقع صدور و هم موقع تمدید از اینترنت قابل دسترس باشد. خود hub
 از این پورت استفاده نمی‌کند.

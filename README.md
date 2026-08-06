@@ -32,14 +32,19 @@ installs Go, builds, obtains the certificate and starts the service:
 ```
 ? How should the dashboard be served?
   1. HTTPS with a free Let's Encrypt certificate for a domain (auto-renews)
-  2. HTTPS with certificate files you already have
-  3. Plain HTTP — only safe behind a reverse proxy or on a private network
+  2. HTTPS for this server's IP address — no domain needed (~6-day cert, auto-renews)
+  3. HTTPS with certificate files you already have
+  4. Plain HTTP — only safe behind a reverse proxy or on a private network
 ? Choose [1]: 1
 ? Domain name (e.g. monitor.example.com): monitor.example.com
 ? Port for the dashboard [443]:
 ? Set the admin password yourself? (otherwise one is generated) [y/N]:
 ? ufw is active — open port 443? [Y/n]:
 ```
+
+No domain? Pick **2**. Let's Encrypt issues certificates for bare IP addresses
+under its short-lived profile, so you get real HTTPS with no browser warning
+and nothing to buy.
 
 Open the printed URL, sign in with the generated password, then **Servers → Add
 server**. You get a one-liner to paste on each machine you want to watch:
@@ -85,8 +90,9 @@ Every question can be answered up front with a flag; supply them all (or pass
 | Flag | Default | Purpose |
 | --- | --- | --- |
 | `--port N` | 443 with SSL, else 8080 | port the dashboard listens on |
-| `--ssl domain\|files\|none` | asked | certificate mode |
+| `--ssl domain\|ip\|files\|none` | asked | certificate mode |
 | `--domain NAME` | asked | domain for `--ssl domain` |
+| `--server-ip ADDR` | auto-detected | public IPv4 for `--ssl ip` |
 | `--cert` / `--key` | asked | files for `--ssl files` |
 | `--acme-port N` | `80` | port acme.sh binds while validating |
 | `--admin-user` | `admin` | first operator name |
@@ -117,11 +123,16 @@ the Go compiler gets OOM-killed otherwise, with no useful error.
 
 ### Certificates
 
-Choosing **Let's Encrypt** installs `acme.sh`, checks that the domain's A record
-actually points at this server, issues the certificate over HTTP-01 on port 80
-(standalone, so no web server is required) and registers a renewal hook that
-copies the renewed pair into `/etc/srvmon/cert/` and restarts the hub. Renewal
-is unattended from then on.
+Choosing **Let's Encrypt for a domain** installs `acme.sh`, checks that the
+domain's A record actually points at this server, issues the certificate over
+HTTP-01 on port 80 (standalone, so no web server is required) and registers a
+renewal hook that copies the renewed pair into `/etc/srvmon/cert/` and restarts
+the hub. Renewal is unattended from then on.
+
+**Let's Encrypt for an IP address** works the same way but needs no domain at
+all. These certificates use the short-lived profile and expire in about six
+days, so the renewal hook is doing real work — it just runs on the same
+unattended acme.sh cron.
 
 Port 80 has to be reachable from the internet for both issuance and renewal. The
 hub itself does not use it.
