@@ -313,6 +313,8 @@ go mod tidy
 info "building the hub"
 go build -trimpath -ldflags "-s -w" -o /usr/local/bin/srvmon-hub ./cmd/hub
 
+install -m 0755 "$SOURCE_DIR/internal/hub/web/srvmon.sh" /usr/local/bin/srvmon
+
 info "building agents for linux amd64, arm64 and arm"
 mkdir -p "$DATA_DIR/bin"
 # The database holds agent tokens and password hashes, so the directory is not
@@ -491,8 +493,9 @@ if systemctl is-active --quiet srvmon-hub; then
     journalctl -u srvmon-hub --no-pager 2>/dev/null | grep -E "username:|password:" | tail -n 2 || true
   fi
   echo -e "${green}────────────────────────────────────────────────────────${plain}"
+  echo -e " manage:    ${blue}srvmon${plain}   (menu: status, logs, update, password, uninstall)"
   echo -e " logs:      ${blue}journalctl -u srvmon-hub -f${plain}"
-  echo -e " update:    re-run this installer"
+  echo -e " update:    ${blue}srvmon update${plain}, or re-run this installer"
   echo -e " uninstall: ${blue}bash <(curl -fsSL https://raw.githubusercontent.com/$REPO/$BRANCH/scripts/install-hub.sh) --uninstall${plain}"
   echo
   echo -e " Next: open the dashboard, go to Servers → Add server, and paste the"

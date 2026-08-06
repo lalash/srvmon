@@ -3,7 +3,7 @@ import { icons } from './icons.js';
 import { t, lang, setLang, applyDirection } from './i18n.js';
 import {
   coreFormat, cpuSpeedFormat, escapeHtml, formatClock, formatDateTime, formatSecond,
-  mean, peak, percentOf, relativeTime, sizeFormat, speedFormat, speedFormatShort, usageColor,
+  mean, peak, percentOf, relativeTime, sizeCompact, sizeFormat, speedFormat, speedFormatShort, usageColor,
   CRIT_PERCENT, WARN_PERCENT,
 } from './fmt.js';
 
@@ -349,19 +349,20 @@ function serverCardMarkup(server) {
       ${meterMarkup('mem', t('memory'))}
       ${meterMarkup('disk', t('storage'))}
     </div>
-    <div class="srv-speed">
-      <span>${icons.up} <b data-ref="up">0</b></span>
-      <span>${icons.down} <b data-ref="down">0</b></span>
-      <span style="margin-inline-start:auto" data-ref="conn"></span>
+    <div class="srv-net">
+      <span class="srv-net-item" style="color:var(--primary)">${icons.up}<b data-ref="up">—</b></span>
+      <span class="srv-net-item" style="color:var(--text-3)">${icons.down}<b data-ref="down">—</b></span>
+      <span class="srv-net-conn" data-ref="conn"></span>
     </div>
     <div class="srv-chart" data-ref="chart"></div>
   </div>`;
 }
 
 function meterMarkup(key, label) {
-  return `<div>
-    <div class="srv-bar-label"><span>${label}</span><span class="srv-bar-value" data-ref="${key}Text">—</span></div>
+  return `<div class="srv-meter">
+    <div class="srv-meter-top"><span>${label}</span><b data-ref="${key}Pct">—</b></div>
     <div class="meter"><span data-ref="${key}Bar" style="width:0%"></span></div>
+    <div class="srv-meter-sub" data-ref="${key}Sub"></div>
   </div>`;
 }
 
@@ -404,9 +405,11 @@ function updateServerCard(card, server) {
   const memPercent = status ? percentOf(status.mem) : 0;
   const diskPercent = status ? percentOf(status.disk) : 0;
 
-  applyMeter(card, 'cpu', cpu, `${cpu.toFixed(1)}%`);
-  applyMeter(card, 'mem', memPercent, status ? `${sizeFormat(status.mem.current)} / ${sizeFormat(status.mem.total)}` : '—');
-  applyMeter(card, 'disk', diskPercent, status ? `${diskPercent.toFixed(0)}%` : '—');
+  applyMeter(card, 'cpu', cpu, status ? `${status.cpuCores}C / ${status.logicalPro}T` : '');
+  applyMeter(card, 'mem', memPercent,
+    status ? `${sizeCompact(status.mem.current)} / ${sizeCompact(status.mem.total)}` : '');
+  applyMeter(card, 'disk', diskPercent,
+    status ? `${sizeCompact(status.disk.current)} / ${sizeCompact(status.disk.total)}` : '');
 
   setText('up', status ? speedFormat(status.netIO.up) : '—', card);
   setText('down', status ? speedFormat(status.netIO.down) : '—', card);
@@ -416,16 +419,20 @@ function updateServerCard(card, server) {
   if (chart) {
     const live = seriesFor(server.id);
     renderChart(chart, {
-      height: 54,
-      yMax: 100,
-      format: (v) => `${v.toFixed(0)}%`,
-      series: [{ data: live.map((point) => point.cpu), color: usageColor(cpu), name: t('cpu') }],
+      height: 58,
+      yMax: null,
+      format: speedFormat,
+      series: [
+        { data: live.map((point) => point.netUp), color: 'var(--primary)', name: t('upload') },
+        { data: live.map((point) => point.netDown), color: 'var(--text-3)', name: t('download'), fill: 0.16 },
+      ],
     });
   }
 }
 
-function applyMeter(card, key, percent, text) {
-  setText(`${key}Text`, text, card);
+function applyMeter(card, key, percent, sub) {
+  setText(`${key}Pct`, `${percent.toFixed(1)}%`, card);
+  setText(`${key}Sub`, sub, card);
   const bar = ref(`${key}Bar`, card);
   if (!bar) return;
   bar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
@@ -826,20 +833,29 @@ function addServerDialog() {
 function showInstallDialog(server) {
   const mask = openModal(`<h3>${t('installTitle')}</h3>
     <p class="section-sub">${t('installSub')}</p>
-    <div class="code" data-ref="cmd">${escapeHtml(server.installCommand)}</div>
+    <div class="code">${escapeHtml(server.installCommand)}</div>
     <div class="field" style="margin-top:16px">
       <label>${t('token')}</label>
       <div class="code">${escapeHtml(server.token)}</div>
     </div>
+    <div class="field">
+      <label>${t('manageOnServer')}</label>
+      <div class="code">srvmon</div>
+      <span class="hint">${t('manageOnServerHint')}</span>
+    </div>
+    <div class="field">
+      <label>${t('uninstallCommand')}</label>
+      <div class="code">${escapeHtml(server.uninstallCommand || '')}</div>
+    </div>
     <div class="modal-foot">
-      <button class="btn" data-ref="copy">${icons.copy} ${t('copy')}</button>
+      <button class="btn" data-ref="copyUninstall">${icons.copy} ${t('uninstallCommand')}</button>
+      <button class="btn" data-ref="copy">${icons.copy} ${t('installCommand')}</button>
       <button class="btn primary" data-ref="close">${t('close')}</button>
     </div>`);
 
   ref('close', mask).addEventListener('click', () => mask.remove());
-  ref('copy', mask).addEventListener('click', async () => {
-    await copyText(server.installCommand);
-  });
+  ref('copy', mask).addEventListener('click', () => copyText(server.installCommand));
+  ref('copyUninstall', mask).addEventListener('click', () => copyText(server.uninstallCommand || ''));
 }
 
 async function copyText(text) {

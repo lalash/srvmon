@@ -28,8 +28,9 @@ type serverView struct {
 	AgentVersion   string            `json:"agentVersion"`
 	IPv4           string            `json:"ipv4"`
 	IPv6           string            `json:"ipv6"`
-	Token          string            `json:"token,omitempty"`
-	InstallCommand string            `json:"installCommand,omitempty"`
+	Token            string          `json:"token,omitempty"`
+	InstallCommand   string          `json:"installCommand,omitempty"`
+	UninstallCommand string          `json:"uninstallCommand,omitempty"`
 	Status         *metrics.Snapshot `json:"status,omitempty"`
 	Live           []Sample          `json:"live,omitempty"`
 }
@@ -192,6 +193,7 @@ func (h *Hub) handleListServers(w http.ResponseWriter, r *http.Request) {
 		view := viewOf(srv, now, offlineAfter)
 		view.Token = srv.Token
 		view.InstallCommand = installCommand(base, srv.Token, srv.Name)
+		view.UninstallCommand = uninstallCommand(base)
 		out = append(out, view)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"servers": out, "baseUrl": base})
@@ -224,6 +226,7 @@ func (h *Hub) handleCreateServer(w http.ResponseWriter, r *http.Request) {
 	view := viewOf(srv, time.Now(), h.offlineAfter())
 	view.Token = srv.Token
 	view.InstallCommand = installCommand(h.baseURL(r), srv.Token, srv.Name)
+	view.UninstallCommand = uninstallCommand(h.baseURL(r))
 	writeJSON(w, http.StatusOK, view)
 }
 
@@ -352,6 +355,10 @@ func (h *Hub) baseURL(r *http.Request) string {
 func installCommand(base, token, name string) string {
 	return fmt.Sprintf("bash <(curl -fsSL %s/install-agent.sh) --hub %s --token %s --name %q",
 		base, base, token, name)
+}
+
+func uninstallCommand(base string) string {
+	return fmt.Sprintf("bash <(curl -fsSL %s/install-agent.sh) --uninstall", base)
 }
 
 func pathID(r *http.Request) (int64, error) {

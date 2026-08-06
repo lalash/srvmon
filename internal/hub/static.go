@@ -99,6 +99,12 @@ func (h *Hub) staticHandler() http.Handler {
 			w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
 			serveFile(w, r, assets, "install-agent.sh")
 			return
+		case "/srvmon.sh":
+			// Fetched by the agent installer so every monitored machine gets the
+			// same `srvmon` management menu without shipping the whole repo.
+			w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
+			serveFile(w, r, assets, "srvmon.sh")
+			return
 		}
 
 		if target, ok := strings.CutPrefix(r.URL.Path, "/download/agent/"); ok {

@@ -28,6 +28,17 @@ export function speedFormatShort(bps) {
   return `${sizeFormat(bps).replace(/\.\d+/, '')}/s`;
 }
 
+// One-letter units for the three-across meters on a server card, where
+// "488.50 MB / 3.73 GB" wraps onto three lines but "489M / 3.7G" does not.
+export function sizeCompact(size) {
+  if (!size || !Number.isFinite(size) || size <= 0) return '0';
+  if (size < KB) return `${size.toFixed(0)}B`;
+  if (size < MB) return `${Math.round(size / KB)}K`;
+  if (size < GB) return `${Math.round(size / MB)}M`;
+  if (size < TB) return `${(size / GB).toFixed(1)}G`;
+  return `${(size / TB).toFixed(1)}T`;
+}
+
 export function cpuSpeedFormat(mhz) {
   if (!mhz) return '—';
   return mhz > 1000 ? `${(mhz / 1000).toFixed(2)} GHz` : `${mhz.toFixed(2)} MHz`;

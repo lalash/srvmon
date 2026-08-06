@@ -32,11 +32,13 @@ body.dark {
   --sider: #15161a;
   --card: #23252b;
   --elevated: #2d2f37;
-  --line: rgba(255, 255, 255, 0.12);
-  --line-soft: rgba(255, 255, 255, 0.06);
-  --text: rgba(255, 255, 255, 0.85);
-  --text-2: rgba(255, 255, 255, 0.65);
-  --text-3: rgba(255, 255, 255, 0.45);
+  --line: rgba(255, 255, 255, 0.16);
+  --line-soft: rgba(255, 255, 255, 0.08);
+  /* Contrast on the dark card (#23252b): 0.92 ≈ 13:1, 0.74 ≈ 8:1, 0.6 ≈ 5.4:1.
+     Anything dimmer fails AA at the 10-11px the kickers and feet are set in. */
+  --text: rgba(255, 255, 255, 0.92);
+  --text-2: rgba(255, 255, 255, 0.74);
+  --text-3: rgba(255, 255, 255, 0.6);
   --primary: #1668dc;
   --primary-soft: rgba(22, 104, 220, 0.18);
   --success: #49aa19;
@@ -374,10 +376,11 @@ a {
   justify-content: space-between;
   gap: 8px;
   padding: 14px var(--ov-pad) 0;
-  font-size: 10px;
-  letter-spacing: 0.06em;
+  font-size: 11px;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ov-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .ov-tile-chart {
@@ -614,22 +617,40 @@ a {
 .srv-bars {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 14px var(--ov-pad) 0;
+  gap: 14px;
+  padding: 16px var(--ov-pad) 0;
 }
 
-.srv-bar-label {
+/* The percentage sits on the label line and the absolute figure gets its own
+   line beneath: at three columns in a 320px card they cannot share one. */
+.srv-meter-top {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
+  gap: 6px;
   font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--ov-label);
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
-.srv-bar-value {
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
+.srv-meter-top b {
+  font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.srv-meter-sub {
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--ov-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .meter {
@@ -646,22 +667,39 @@ a {
   transition: width 0.4s ease, background 0.3s ease;
 }
 
-.srv-speed {
+.srv-net {
   display: flex;
-  gap: 16px;
-  padding: 14px var(--ov-pad) 0;
+  align-items: center;
+  gap: 14px;
+  margin: 16px var(--ov-pad) 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
   font-size: 12px;
   color: var(--ov-label);
 }
 
-.srv-speed b {
+.srv-net-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.srv-net-item b {
   color: var(--text);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 
+.srv-net-conn {
+  margin-inline-start: auto;
+  font-size: 11px;
+  color: var(--ov-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .srv-chart {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .srv-offline {
@@ -1096,9 +1134,11 @@ textarea.input {
 .ov-strip-value,
 .ov-foot-value,
 .ov-legend-num,
-.srv-bar-value,
-.srv-speed,
-.srv-speed b,
+.srv-meter-top,
+.srv-meter-sub,
+.srv-net,
+.srv-net b,
+.srv-net-conn,
 .ov-tile-unit,
 .srv-uptime,
 .srv-meta,

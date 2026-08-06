@@ -204,8 +204,38 @@ sudo bash <(curl -fsSL https://monitor.example.com/install-agent.sh) --hub https
 `/etc/srvmon/agent.conf` را با دسترسی 600 می‌نویسد، یونیت systemd نصب می‌کند و
 اجرا می‌کند.
 
-برای حذف ایجنت `--uninstall` بدهید. لاگ: `journalctl -u srvmon-agent -f`.
 اگر گواهی hub خودامضا است، `--insecure` اضافه کنید.
+
+## مدیریت از روی خود سرور
+
+هر دو اینستالر یک دستور `srvmon` روی سرور می‌گذارند. خالی اجرا کنید تا منو باز
+شود، یا با زیردستور صدایش بزنید:
+
+</div>
+
+```bash
+srvmon
+```
+
+```
+srvmon — hub agent management
+  1. Status                      6. Update to the latest version
+  2. Restart                     7. Change the dashboard password
+  3. Stop                        8. Show the dashboard URL
+  4. Start                       9. Uninstall
+  5. Follow logs                 0. Exit
+```
+
+<div dir="rtl">
+
+`srvmon status | start | stop | restart | logs | update | uninstall | password | url`
+
+خودش تشخیص می‌دهد روی آن ماشین چه چیزی نصب است: روی سرور ایجنت، گزینه‌های مخصوص
+hub نمایش داده نمی‌شوند و `update` از همان hubی که به آن گزارش می‌دهد به‌روزرسانی
+می‌گیرد. روی سرور مرکزی، `update` از گیت‌هاب بیلد می‌گیرد و تنظیمات موجود در
+`/etc/srvmon/hub.conf` را استفاده می‌کند، پس دوباره سؤالات نصب را نمی‌پرسد.
+
+دستور حذف در خود پنل هم کنار دستور نصب هر سرور نمایش داده می‌شود.
 
 ## توسعه محلی
 

@@ -32,8 +32,13 @@ fi
 
 if [ "${UNINSTALL:-0}" = "1" ]; then
   systemctl disable --now srvmon-agent 2>/dev/null || true
-  rm -f /etc/systemd/system/srvmon-agent.service /usr/local/bin/srvmon-agent
-  rm -rf /etc/srvmon
+  rm -f /etc/systemd/system/srvmon-agent.service /usr/local/bin/srvmon-agent /etc/srvmon/agent.conf
+  # The management menu and /etc/srvmon belong to the hub too when both are on
+  # one machine, so they only go when nothing else is left.
+  if [ ! -x /usr/local/bin/srvmon-hub ]; then
+    rm -f /usr/local/bin/srvmon
+    rmdir /etc/srvmon 2>/dev/null || true
+  fi
   systemctl daemon-reload 2>/dev/null || true
   echo "srvmon agent removed"
   exit 0
@@ -68,6 +73,12 @@ fi
 
 install -m 0755 "$TMP" /usr/local/bin/srvmon-agent
 rm -f "$TMP"
+
+# shellcheck disable=SC2086
+if curl $CURL_OPTS -o "$TMP" "$HUB/srvmon.sh" 2>/dev/null; then
+  install -m 0755 "$TMP" /usr/local/bin/srvmon
+  rm -f "$TMP"
+fi
 
 mkdir -p /etc/srvmon
 umask 077
@@ -113,6 +124,7 @@ sleep 2
 echo
 if systemctl is-active --quiet srvmon-agent; then
   echo "==> srvmon agent is running and reporting to $HUB as \"$NAME\""
+  echo "    manage: srvmon          (menu: status, logs, update, uninstall)"
   echo "    logs:   journalctl -u srvmon-agent -f"
   echo "    remove: bash <(curl -fsSL $HUB/install-agent.sh) --uninstall"
 else

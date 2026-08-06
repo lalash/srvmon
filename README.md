@@ -170,9 +170,35 @@ sudo bash <(curl -fsSL https://monitor.example.com/install-agent.sh) --hub https
 That downloads the matching agent build from the hub, writes
 `/etc/srvmon/agent.conf` (mode 600), installs a systemd unit and starts it.
 
-Remove an agent with `--uninstall`. Follow it with
-`journalctl -u srvmon-agent -f`. If the hub uses a self-signed certificate, add
-`--insecure`.
+If the hub uses a self-signed certificate, add `--insecure`.
+
+## Managing a machine from its own shell
+
+Both installers drop a `srvmon` command on the machine. Run it bare for a menu,
+or give it a subcommand:
+
+```bash
+srvmon
+```
+
+```
+srvmon — hub agent management
+  1. Status                      6. Update to the latest version
+  2. Restart                     7. Change the dashboard password
+  3. Stop                        8. Show the dashboard URL
+  4. Start                       9. Uninstall
+  5. Follow logs                 0. Exit
+```
+
+`srvmon status | start | stop | restart | logs | update | uninstall | password | url`
+
+It works out what is installed on that machine: on an agent host the hub-only
+entries are hidden, and `update` re-fetches from the hub it reports to. On the
+hub, `update` rebuilds from GitHub with the settings already in
+`/etc/srvmon/hub.conf`, so it never re-asks the install questions.
+
+The uninstall command is also shown in the dashboard, next to each server's
+install command.
 
 ## Local development
 
