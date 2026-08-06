@@ -30,6 +30,7 @@ BASE_URL=""
 SOURCE_DIR=""
 OPEN_FIREWALL=""
 ASSUME_YES="0"
+FORCE_CERT="0"
 
 red=$'\033[0;31m'; green=$'\033[0;32m'; yellow=$'\033[0;33m'; blue=$'\033[0;34m'; plain=$'\033[0m'
 info() { echo -e "${green}==>${plain} $*"; }
@@ -52,6 +53,7 @@ Options (anything you leave out is asked interactively):
   --source DIR           build from a local checkout instead of GitHub
   --repo USER/NAME --branch NAME
   --open-firewall yes|no punch the port through ufw/firewalld
+  --force-cert           reissue the certificate even if the current one is fine
   -y, --yes              accept every default, never prompt
   --uninstall            remove the service and binary, keep the database
 EOF
@@ -74,6 +76,7 @@ while [ $# -gt 0 ]; do
     --repo) REPO="$2"; shift 2 ;;
     --branch) BRANCH="$2"; shift 2 ;;
     --open-firewall) OPEN_FIREWALL="$2"; shift 2 ;;
+    --force-cert) FORCE_CERT="1"; shift ;;
     -y|--yes) ASSUME_YES="1"; shift ;;
     --uninstall) UNINSTALL="1"; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -134,6 +137,14 @@ is_ipv4() {
 
 is_port() {
   [[ "$1" =~ ^[1-9][0-9]*$ ]] && [ "$1" -le 65535 ]
+}
+
+# Re-running the installer is the documented way to update, so it must not burn
+# a Let's Encrypt issuance every time. Anything with more than two days left is
+# left alone — well inside the ~6-day life of an IP certificate.
+cert_still_good() {
+  [ -s "$1" ] || return 1
+  openssl x509 -checkend 172800 -noout -in "$1" >/dev/null 2>&1
 }
 
 detect_pkg() {
@@ -252,7 +263,7 @@ fi
 # ------------------------------------------------------------------- build
 
 info "installing prerequisites"
-install_packages curl ca-certificates tar
+install_packages curl ca-certificates tar openssl
 
 case "$(uname -m)" in
   x86_64|amd64) HOST_ARCH="amd64" ;;
@@ -317,6 +328,19 @@ chmod 0755 "$DATA_DIR"/bin/srvmon-agent-*
 # ------------------------------------------------------------- certificate
 
 if [ "$SSL_MODE" = "domain" ] || [ "$SSL_MODE" = "ip" ]; then
+  CERT_NAME="$DOMAIN"
+  [ "$SSL_MODE" = "ip" ] && CERT_NAME="$SERVER_IP"
+  CERT="$CERT_DIR/$CERT_NAME.crt"
+  KEY="$CERT_DIR/$CERT_NAME.key"
+
+  if [ "$FORCE_CERT" = "0" ] && cert_still_good "$CERT"; then
+    expiry="$(openssl x509 -enddate -noout -in "$CERT" 2>/dev/null | cut -d= -f2)"
+    info "reusing the existing certificate for $CERT_NAME (valid until $expiry)"
+    SKIP_ISSUE="1"
+  fi
+fi
+
+if [ "${SKIP_ISSUE:-0}" = "0" ] && { [ "$SSL_MODE" = "domain" ] || [ "$SSL_MODE" = "ip" ]; }; then
   if [ "$SSL_MODE" = "domain" ]; then
     info "checking DNS for $DOMAIN"
     server_ip="$(public_ip)"
@@ -352,7 +376,6 @@ if [ "$SSL_MODE" = "domain" ] || [ "$SSL_MODE" = "ip" ]; then
   "$acme" --set-default-ca --server letsencrypt >/dev/null 2>&1 || true
 
   if [ "$SSL_MODE" = "ip" ]; then
-    CERT_NAME="$SERVER_IP"
     info "requesting an IP certificate for $SERVER_IP"
     # Let's Encrypt only issues for a bare IP under the shortlived profile, so
     # these certs last ~6 days; acme.sh's daily cron is what keeps them valid.
@@ -362,7 +385,6 @@ if [ "$SSL_MODE" = "domain" ] || [ "$SSL_MODE" = "ip" ]; then
       --certificate-profile shortlived --days 6 --httpport "$ACME_HTTP_PORT" --force \
       || fail "IP certificate issuance failed — check that port ${ACME_HTTP_PORT} is reachable from the internet"
   else
-    CERT_NAME="$DOMAIN"
     info "requesting a certificate for $DOMAIN"
     # shellcheck disable=SC2086
     "$acme" --issue -d "$DOMAIN" $listen_flag --standalone --httpport "$ACME_HTTP_PORT" --force \
@@ -370,8 +392,6 @@ if [ "$SSL_MODE" = "domain" ] || [ "$SSL_MODE" = "ip" ]; then
   fi
 
   mkdir -p "$CERT_DIR"
-  CERT="$CERT_DIR/$CERT_NAME.crt"
-  KEY="$CERT_DIR/$CERT_NAME.key"
   # --installcert also registers the renewal hook, so the acme.sh cron copies
   # the renewed pair here and restarts the hub without anyone watching. Its
   # exit code is unusable: the reloadcmd runs immediately and the unit does not
