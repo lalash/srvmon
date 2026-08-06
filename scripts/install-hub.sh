@@ -473,7 +473,10 @@ if [ "$OPEN_FIREWALL" = "yes" ]; then
 fi
 
 systemctl daemon-reload
-systemctl enable --now srvmon-hub >/dev/null 2>&1
+systemctl enable srvmon-hub >/dev/null 2>&1
+# restart, not `enable --now`: on an update run the unit is already active, and
+# --now is a no-op there, so the freshly built binary would never be picked up.
+systemctl restart srvmon-hub
 sleep 2
 
 echo
