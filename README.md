@@ -23,7 +23,22 @@ a closed firewall.
 On the central server:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/lalash/srvmon/main/scripts/install-hub.sh) --base-url https://monitor.example.com
+bash <(curl -fsSL https://raw.githubusercontent.com/lalash/srvmon/main/scripts/install-hub.sh)
+```
+
+It asks what it needs — certificate mode, domain, port, admin password — then
+installs Go, builds, obtains the certificate and starts the service:
+
+```
+? How should the dashboard be served?
+  1. HTTPS with a free Let's Encrypt certificate for a domain (auto-renews)
+  2. HTTPS with certificate files you already have
+  3. Plain HTTP — only safe behind a reverse proxy or on a private network
+? Choose [1]: 1
+? Domain name (e.g. monitor.example.com): monitor.example.com
+? Port for the dashboard [443]:
+? Set the admin password yourself? (otherwise one is generated) [y/N]:
+? ufw is active — open port 443? [Y/n]:
 ```
 
 Open the printed URL, sign in with the generated password, then **Servers → Add
@@ -59,34 +74,63 @@ architecture and CPU model.
 
 ## Installing the hub
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/lalash/srvmon/main/scripts/install-hub.sh) --base-url https://monitor.example.com
-```
+The installer handles Go, the source, the build, the certificate, the systemd
+unit and the firewall. It fetches the source into `/opt/srvmon`, builds the hub
+plus the Linux agents (amd64/arm64/arm), and prints a generated admin password
+on first run — that line is the only place it appears.
 
-The script installs Go if it is missing, fetches the source into `/opt/srvmon`,
-builds the hub and the Linux agents (amd64/arm64/arm), installs a systemd unit
-and starts it. On first run it prints a generated admin password — that line is
-the only place it appears. Pass `--admin-password` to choose one yourself.
+Every question can be answered up front with a flag; supply them all (or pass
+`-y`) and it never prompts.
 
 | Flag | Default | Purpose |
 | --- | --- | --- |
-| `--addr` | `:8080` | listen address |
-| `--base-url` | — | public URL baked into generated install commands |
-| `--data-dir` | `/var/lib/srvmon` | database and agent builds |
-| `--cert` / `--key` | — | terminate TLS directly instead of behind a proxy |
+| `--port N` | 443 with SSL, else 8080 | port the dashboard listens on |
+| `--ssl domain\|files\|none` | asked | certificate mode |
+| `--domain NAME` | asked | domain for `--ssl domain` |
+| `--cert` / `--key` | asked | files for `--ssl files` |
+| `--acme-port N` | `80` | port acme.sh binds while validating |
 | `--admin-user` | `admin` | first operator name |
 | `--admin-password` | generated | first operator password |
+| `--base-url URL` | derived | override the URL baked into agent install commands |
+| `--data-dir DIR` | `/var/lib/srvmon` | database and agent builds |
+| `--open-firewall yes\|no` | asked | punch the port through ufw/firewalld |
+| `--source DIR` | GitHub | build from a local checkout |
+| `-y`, `--yes` | — | accept every default, never prompt |
 | `--uninstall` | — | remove the service and binary, keep the database |
+
+Fully scripted, for example:
+
+```bash
+bash install-hub.sh --ssl domain --domain monitor.example.com --port 443 --admin-password 'choose-something' --open-firewall yes
+```
+
+> Use `bash <(curl …)`, not `curl … | bash`. With a pipe, stdin is the script
+> itself, so nothing can be asked and every unset option silently takes its
+> default. The installer warns when it detects this.
 
 Configuration lives in `/etc/srvmon/hub.conf` and is read by the unit; edit it
 and `systemctl restart srvmon-hub`. Re-running the installer updates the hub in
 place. Logs: `journalctl -u srvmon-hub -f`.
 
-### TLS
+On a host with under 1 GB of RAM the installer adds a 1 GB swapfile first —
+the Go compiler gets OOM-killed otherwise, with no useful error.
 
-Either point the hub at a certificate (`--cert` / `--key`), or put it behind a
-reverse proxy. With nginx, the only non-obvious requirement is that the SSE
-stream must not be buffered:
+### Certificates
+
+Choosing **Let's Encrypt** installs `acme.sh`, checks that the domain's A record
+actually points at this server, issues the certificate over HTTP-01 on port 80
+(standalone, so no web server is required) and registers a renewal hook that
+copies the renewed pair into `/etc/srvmon/cert/` and restarts the hub. Renewal
+is unattended from then on.
+
+Port 80 has to be reachable from the internet for both issuance and renewal. The
+hub itself does not use it.
+
+### Behind a reverse proxy
+
+If you would rather terminate TLS in nginx, install with `--ssl none` and proxy
+to it. The only non-obvious requirement is that the SSE stream must not be
+buffered:
 
 ```nginx
 location / {

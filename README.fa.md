@@ -30,7 +30,26 @@
 </div>
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/lalash/srvmon/main/scripts/install-hub.sh) --base-url https://monitor.example.com
+bash <(curl -fsSL https://raw.githubusercontent.com/lalash/srvmon/main/scripts/install-hub.sh)
+```
+
+<div dir="rtl">
+
+خودش هرچه لازم دارد می‌پرسد — نوع گواهی، دامنه، پورت، رمز ادمین — بعد Go را
+نصب می‌کند، بیلد می‌گیرد، گواهی SSL را می‌گیرد و سرویس را بالا می‌آورد:
+
+</div>
+
+```
+? How should the dashboard be served?
+  1. HTTPS with a free Let's Encrypt certificate for a domain (auto-renews)
+  2. HTTPS with certificate files you already have
+  3. Plain HTTP — only safe behind a reverse proxy or on a private network
+? Choose [1]: 1
+? Domain name (e.g. monitor.example.com): monitor.example.com
+? Port for the dashboard [443]:
+? Set the admin password yourself? (otherwise one is generated) [y/N]:
+? ufw is active — open port 443? [Y/n]:
 ```
 
 <div dir="rtl">
@@ -73,38 +92,67 @@ sudo bash <(curl -fsSL https://monitor.example.com/install-agent.sh) --hub https
 
 ## نصب سرور مرکزی
 
+اسکریپت نصب همه‌چیز را خودش انجام می‌دهد: نصب Go، دریافت سورس در `/opt/srvmon`،
+بیلد hub و ایجنت‌های لینوکس (amd64/arm64/arm)، گرفتن گواهی SSL، نصب یونیت
+systemd و باز کردن پورت در فایروال. در اولین اجرا یک رمز ادمین تولید و چاپ
+می‌کند — آن خط تنها جایی است که این رمز دیده می‌شود.
+
+هر سؤالی را می‌شود از قبل با گزینه خط فرمان جواب داد؛ اگر همه را بدهید (یا `-y`
+بزنید) هیچ سؤالی نمی‌پرسد.
+
+| گزینه | پیش‌فرض | کاربرد |
+| --- | --- | --- |
+| `--port N` | با SSL برابر ۴۴۳، وگرنه ۸۰۸۰ | پورتی که داشبورد روی آن اجرا می‌شود |
+| `--ssl domain\|files\|none` | پرسیده می‌شود | نوع گواهی |
+| `--domain NAME` | پرسیده می‌شود | دامنه برای حالت `domain` |
+| `--cert` / `--key` | پرسیده می‌شود | مسیر فایل‌ها برای حالت `files` |
+| `--acme-port N` | `80` | پورتی که acme.sh هنگام اعتبارسنجی می‌گیرد |
+| `--admin-user` | `admin` | نام کاربر اول |
+| `--admin-password` | تولید خودکار | رمز کاربر اول |
+| `--base-url URL` | خودکار | جایگزینی آدرسی که در دستور نصب ایجنت‌ها می‌آید |
+| `--data-dir DIR` | `/var/lib/srvmon` | دیتابیس و فایل‌های ایجنت |
+| `--open-firewall yes\|no` | پرسیده می‌شود | باز کردن پورت در ufw یا firewalld |
+| `--source DIR` | گیت‌هاب | بیلد از یک checkout محلی |
+| `-y`, `--yes` | — | قبول همه پیش‌فرض‌ها بدون هیچ سؤالی |
+| `--uninstall` | — | حذف سرویس و باینری، دیتابیس دست‌نخورده می‌ماند |
+
+مثلاً به‌صورت کاملاً خودکار:
+
 </div>
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/lalash/srvmon/main/scripts/install-hub.sh) --base-url https://monitor.example.com
+bash install-hub.sh --ssl domain --domain monitor.example.com --port 443 --admin-password 'یک-رمز-خوب' --open-firewall yes
 ```
 
 <div dir="rtl">
 
-اسکریپت اگر Go نصب نباشد نصبش می‌کند، سورس را در `/opt/srvmon` می‌گیرد، hub و
-ایجنت‌های لینوکس (amd64/arm64/arm) را می‌سازد، یونیت systemd را نصب و اجرا
-می‌کند. در اولین اجرا یک رمز ادمین تولید و چاپ می‌کند — آن خط تنها جایی است که
-این رمز دیده می‌شود. اگر رمز دلخواه می‌خواهید `--admin-password` بدهید.
-
-| گزینه | پیش‌فرض | کاربرد |
-| --- | --- | --- |
-| `--addr` | `:8080` | آدرس گوش دادن |
-| `--base-url` | — | آدرس عمومی که در دستور نصب ایجنت‌ها قرار می‌گیرد |
-| `--data-dir` | `/var/lib/srvmon` | دیتابیس و فایل‌های ایجنت |
-| `--cert` / `--key` | — | پایان دادن TLS مستقیم به‌جای پشت پروکسی |
-| `--admin-user` | `admin` | نام کاربر اول |
-| `--admin-password` | تولید خودکار | رمز کاربر اول |
-| `--uninstall` | — | حذف سرویس و باینری، دیتابیس دست‌نخورده می‌ماند |
+> حتماً `bash <(curl …)` استفاده کنید، نه `curl … | bash`. با پایپ، ورودی
+> استاندارد خودِ اسکریپت است، پس هیچ سؤالی نمی‌شود پرسید و هر گزینه‌ای که
+> ندهید بی‌صدا مقدار پیش‌فرضش را می‌گیرد. اسکریپت این حالت را تشخیص می‌دهد و
+> هشدار می‌دهد.
 
 تنظیمات در `/etc/srvmon/hub.conf` است و یونیت از همان می‌خواند؛ بعد از ویرایش
 `systemctl restart srvmon-hub` بزنید. اجرای دوباره اسکریپت نصب، hub را
 به‌روزرسانی می‌کند. لاگ: `journalctl -u srvmon-hub -f`.
 
-### TLS
+اگر سرور کمتر از ۱ گیگابایت رم داشته باشد، اسکریپت اول یک فایل swap یک‌گیگی
+می‌سازد — وگرنه کامپایلر Go بدون هیچ پیام مفیدی توسط کرنل کشته می‌شود.
 
-یا hub را مستقیم به گواهی وصل کنید (`--cert` / `--key`)، یا پشت یک پروکسی
-معکوس بگذارید. با nginx تنها نکته غیربدیهی این است که استریم SSE نباید بافر
-شود:
+### گواهی SSL
+
+اگر گزینه Let's Encrypt را انتخاب کنید، `acme.sh` نصب می‌شود، بررسی می‌شود که
+رکورد A دامنه واقعاً به همین سرور اشاره کند، گواهی با روش HTTP-01 روی پورت ۸۰
+گرفته می‌شود (حالت standalone، پس نیازی به وب‌سرور نیست) و یک hook تمدید ثبت
+می‌شود که گواهی تازه را در `/etc/srvmon/cert/` کپی می‌کند و hub را ری‌استارت
+می‌کند. از آن به بعد تمدید کاملاً خودکار است.
+
+پورت ۸۰ باید هم موقع صدور و هم موقع تمدید از اینترنت قابل دسترس باشد. خود hub
+از این پورت استفاده نمی‌کند.
+
+### پشت پروکسی معکوس
+
+اگر ترجیح می‌دهید TLS را در nginx تمام کنید، با `--ssl none` نصب کنید و به آن
+پروکسی بزنید. تنها نکته غیربدیهی این است که استریم SSE نباید بافر شود:
 
 </div>
 
