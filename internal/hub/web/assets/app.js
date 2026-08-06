@@ -58,10 +58,14 @@ function setText(name, value, root = view) {
 }
 
 function applyTheme(dark) {
-  document.body.classList.toggle('dark', dark);
+  document.documentElement.classList.toggle('dark', dark);
   localStorage.setItem('srvmon-dark', dark ? 'true' : 'false');
   const button = document.getElementById('themeToggle');
   if (button) button.innerHTML = dark ? icons.sun : icons.moon;
+}
+
+function isDark() {
+  return document.documentElement.classList.contains('dark');
 }
 
 /* ---------- routing ---------- */
@@ -327,8 +331,8 @@ function updateOverview() {
     yMax: null,
     format: speedFormat,
     series: [
-      { data: fleet.up, color: 'var(--primary)', name: t('upload') },
-      { data: fleet.down, color: 'var(--text-3)', name: t('download') },
+      { data: fleet.up, color: 'var(--up)', name: t('upload') },
+      { data: fleet.down, color: 'var(--down)', name: t('download') },
     ],
   });
 
@@ -350,8 +354,8 @@ function serverCardMarkup(server) {
       ${meterMarkup('disk', t('storage'))}
     </div>
     <div class="srv-net">
-      <span class="srv-net-item" style="color:var(--primary)">${icons.up}<b data-ref="up">—</b></span>
-      <span class="srv-net-item" style="color:var(--text-3)">${icons.down}<b data-ref="down">—</b></span>
+      <span class="srv-net-item" style="color:var(--up)">${icons.up}<b data-ref="up">—</b></span>
+      <span class="srv-net-item" style="color:var(--down)">${icons.down}<b data-ref="down">—</b></span>
       <span class="srv-net-conn" data-ref="conn"></span>
     </div>
     <div class="srv-chart" data-ref="chart"></div>
@@ -423,8 +427,8 @@ function updateServerCard(card, server) {
       yMax: null,
       format: speedFormat,
       series: [
-        { data: live.map((point) => point.netUp), color: 'var(--primary)', name: t('upload') },
-        { data: live.map((point) => point.netDown), color: 'var(--text-3)', name: t('download'), fill: 0.16 },
+        { data: live.map((point) => point.netUp), color: 'var(--up)', name: t('upload') },
+        { data: live.map((point) => point.netDown), color: 'var(--down)', name: t('download'), fill: 0.16 },
       ],
     });
   }
@@ -683,8 +687,8 @@ function updateDetail() {
       format: speedFormat,
       axisFormat: speedFormatShort,
       series: [
-        { data: upSeries, color: 'var(--primary)', name: t('upload'), width: 1.75 },
-        { data: downSeries, color: 'var(--text-3)', name: t('download'), width: 1.75 },
+        { data: upSeries, color: 'var(--up)', name: t('upload'), width: 1.75 },
+        { data: downSeries, color: 'var(--down)', name: t('download'), width: 1.75 },
       ],
     });
   }
@@ -767,6 +771,7 @@ async function refreshServersTable() {
       const id = Number(button.dataset.id);
       const server = data.servers.find((item) => item.id === id);
       if (!server) return;
+      if (button.dataset.action === 'edit') editServerDialog(server);
       if (button.dataset.action === 'install') showInstallDialog(server);
       if (button.dataset.action === 'rotate') rotateToken(server);
       if (button.dataset.action === 'delete') deleteServer(server);
@@ -785,6 +790,7 @@ function serverRowMarkup(server) {
     <td dir="ltr">${formatDateTime(server.lastSeen)}</td>
     <td dir="ltr">${escapeHtml(server.agentVersion || '—')}</td>
     <td style="text-align:end;white-space:nowrap">
+      <button class="btn small" data-action="edit" data-id="${server.id}">${t('edit')}</button>
       <button class="btn small" data-action="install" data-id="${server.id}">${t('installCommand')}</button>
       <button class="btn small" data-action="rotate" data-id="${server.id}">${t('rotate')}</button>
       <button class="btn small danger" data-action="delete" data-id="${server.id}">${t('remove')}</button>
@@ -827,6 +833,49 @@ function addServerDialog() {
     } catch (error) {
       toast(error.message, 'error');
     }
+  });
+}
+
+function editServerDialog(server) {
+  const mask = openModal(`<h3>${t('editServer')}</h3>
+    <div class="field"><label>${t('serverName')}</label>
+      <input class="input" data-ref="name" value="${escapeHtml(server.name)}"></div>
+    <div class="field"><label>${t('group')}</label>
+      <input class="input" data-ref="tag" value="${escapeHtml(server.tag || '')}" placeholder="europe"></div>
+    <p class="section-sub">${t('editServerHint')}</p>
+    <div class="modal-foot">
+      <button class="btn" data-ref="cancel">${t('cancel')}</button>
+      <button class="btn primary" data-ref="save">${t('save')}</button>
+    </div>`);
+
+  const nameInput = ref('name', mask);
+  nameInput.focus();
+  nameInput.select();
+
+  const submit = async () => {
+    const name = nameInput.value.trim();
+    if (!name) {
+      toast(t('nameRequired'), 'error');
+      return;
+    }
+    try {
+      await api(`/api/servers/${server.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name, tag: ref('tag', mask).value.trim(), sort: server.sort }),
+      });
+      mask.remove();
+      toast(t('saved'), 'ok');
+      await refreshServersTable();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  };
+
+  ref('cancel', mask).addEventListener('click', () => mask.remove());
+  ref('save', mask).addEventListener('click', submit);
+  mask.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') submit();
+    if (event.key === 'Escape') mask.remove();
   });
 }
 
@@ -1069,7 +1118,7 @@ function boot() {
   buildSidebar();
 
   document.getElementById('themeToggle').addEventListener('click', () => {
-    applyTheme(!document.body.classList.contains('dark'));
+    applyTheme(!isDark());
   });
   document.getElementById('langToggle').addEventListener('click', () => {
     setLang(lang === 'fa' ? 'en' : 'fa');

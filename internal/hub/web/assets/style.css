@@ -16,6 +16,8 @@
   --success: #237804;
   --warn: #faad14;
   --crit: #cf1322;
+  --up: #389e0d;
+  --down: #cf1322;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.05);
 
   --ov-accent: var(--primary);
@@ -27,7 +29,12 @@
   --radius: 8px;
 }
 
-body.dark {
+/* The theme class must live on the same element as the tokens it overrides.
+   A var() inside a custom property is substituted where that property is
+   declared, so with `body.dark` the :root aliases below (--ov-label and
+   friends) resolved against the light values and inherited black text into
+   every dark page. */
+:root.dark {
   --bg: #1a1b1f;
   --sider: #15161a;
   --card: #23252b;
@@ -44,12 +51,16 @@ body.dark {
   --success: #49aa19;
   --warn: #d89614;
   --crit: #dc4446;
+  /* Lifted off the AntD dark palette: the print-weight green and red are too
+     dark to read as a 1.5px line against #23252b. */
+  --up: #6abe39;
+  --down: #e86e6e;
   --shadow: none;
 }
 
-/* Painted before the body class lands, so a dark reload never flashes white. */
-html.pre-dark {
-  background: #1a1b1f;
+/* Set before first paint, so a dark reload never flashes white. */
+:root.dark {
+  background: var(--bg);
 }
 
 * {
