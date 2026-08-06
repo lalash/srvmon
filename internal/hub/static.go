@@ -1,7 +1,9 @@
 package hub
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"io/fs"
 	"net/http"
 	"os"
@@ -23,12 +25,59 @@ var allowedAgentTargets = map[string]bool{
 	"windows-amd64": true,
 }
 
+type asset struct {
+	data        []byte
+	etag        string
+	contentType string
+}
+
+// loadAssets hashes every static file at startup. Files embedded with embed.FS
+// carry a zero modtime, so http.FileServer sends neither Last-Modified nor
+// ETag and a browser is free to keep serving the copy it already has — after an
+// update that means the old dashboard against the new API, indefinitely.
+func loadAssets(root fs.FS) map[string]asset {
+	out := map[string]asset{}
+	err := fs.WalkDir(root, "assets", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		data, err := fs.ReadFile(root, path)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(data)
+		out["/"+path] = asset{
+			data:        data,
+			etag:        `"` + hex.EncodeToString(sum[:8]) + `"`,
+			contentType: contentTypeOf(path),
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+func contentTypeOf(path string) string {
+	switch {
+	case strings.HasSuffix(path, ".js"):
+		return "text/javascript; charset=utf-8"
+	case strings.HasSuffix(path, ".css"):
+		return "text/css; charset=utf-8"
+	case strings.HasSuffix(path, ".svg"):
+		return "image/svg+xml"
+	default:
+		return "application/octet-stream"
+	}
+}
+
 func (h *Hub) staticHandler() http.Handler {
 	assets, err := fs.Sub(webFS, "web")
 	if err != nil {
 		panic(err)
 	}
-	files := http.FileServer(http.FS(assets))
+	static := loadAssets(assets)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -56,8 +105,17 @@ func (h *Hub) staticHandler() http.Handler {
 			h.serveAgentBinary(w, r, target)
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "/assets/") {
-			files.ServeHTTP(w, r)
+		if item, ok := static[r.URL.Path]; ok {
+			// no-cache means "revalidate", not "do not store": an unchanged file
+			// still answers 304 from the ETag.
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("ETag", item.etag)
+			if r.Header.Get("If-None-Match") == item.etag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			w.Header().Set("Content-Type", item.contentType)
+			_, _ = w.Write(item.data)
 			return
 		}
 		http.NotFound(w, r)
