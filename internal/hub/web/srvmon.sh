@@ -204,7 +204,9 @@ menu() {
 }
 
 if [[ "${1:-}" =~ ^(-h|--help|help)$ ]]; then
-  sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+  # Print the comment block under the shebang and stop at the first line of
+  # code, so editing the header never drags `set -uo pipefail` into the help.
+  awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "$0"
   exit 0
 fi
 
