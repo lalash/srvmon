@@ -85,9 +85,16 @@ cmd_update() {
     curl -fsSL "https://raw.githubusercontent.com/$REPO/$BRANCH/scripts/install-hub.sh" -o /tmp/install-hub.sh \
       || fail "could not download the installer"
     # Re-running the installer rebuilds from source and restarts; -y keeps the
-    # answers already stored in hub.conf instead of asking again.
+    # answers already stored in hub.conf instead of asking again. The address
+    # may be ":443" or "0.0.0.0:443", so the port is whatever follows the last
+    # colon — deleting every colon turns the second form into 0.0.0.0443.
+    local port db
+    port="$(conf_value "$HUB_CONF" SRVMON_ADDR | sed 's/.*://')"
+    db="$(conf_value "$HUB_CONF" SRVMON_DB || echo /var/lib/srvmon/srvmon.db)"
+    # shellcheck disable=SC2046
     bash /tmp/install-hub.sh -y \
-      --port "$(conf_value "$HUB_CONF" SRVMON_ADDR | tr -d ':')" \
+      --port "${port:-8080}" \
+      --data-dir "$(dirname "$db")" \
       --ssl "$(hub_ssl_mode)" \
       $(hub_ssl_args)
   fi
