@@ -304,6 +304,10 @@ go build -trimpath -ldflags "-s -w" -o /usr/local/bin/srvmon-hub ./cmd/hub
 
 info "building agents for linux amd64, arm64 and arm"
 mkdir -p "$DATA_DIR/bin"
+# The database holds agent tokens and password hashes, so the directory is not
+# world-readable; UMask in the unit keeps the database file itself at 0600.
+chmod 0750 "$DATA_DIR"
+chmod 0600 "$DATA_DIR"/srvmon.db* 2>/dev/null || true
 for target in amd64 arm64 arm; do
   GOOS=linux GOARCH="$target" CGO_ENABLED=0 \
     go build -trimpath -ldflags "-s -w" -o "$DATA_DIR/bin/srvmon-agent-linux-$target" ./cmd/agent
@@ -430,6 +434,7 @@ NoNewPrivileges=true
 ProtectHome=true
 ProtectSystem=full
 ReadWritePaths=$DATA_DIR
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

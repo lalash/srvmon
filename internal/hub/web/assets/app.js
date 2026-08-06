@@ -16,6 +16,7 @@ const state = {
   mounted: null,
   showIp: false,
   fleet: { cpu: [], mem: [], disk: [], up: [], down: [], labels: [] },
+  series: {},
   detail: { range: 'live', points: null, loading: false },
 };
 
@@ -105,9 +106,50 @@ function render() {
 
 /* ---------- live data ---------- */
 
+// Only the first payload carries each server's rolling window; every later tick
+// is one fresh sample that gets appended here. Keeping the series client-side is
+// what lets the stream stay small no matter how many servers report.
+function trackSeries(payload) {
+  const seen = new Set();
+
+  for (const server of payload.servers || []) {
+    seen.add(server.id);
+    if (!state.series[server.id]) state.series[server.id] = server.live ? server.live.slice() : [];
+    if (!server.status || !server.online) continue;
+
+    const status = server.status;
+    const series = state.series[server.id];
+    const last = series[series.length - 1];
+    if (last && last.t === payload.t) continue;
+
+    series.push({
+      t: payload.t,
+      cpu: status.cpu || 0,
+      mem: percentOf(status.mem),
+      swap: percentOf(status.swap),
+      disk: percentOf(status.disk),
+      netUp: status.netIO.up || 0,
+      netDown: status.netIO.down || 0,
+      tcp: status.tcpCount || 0,
+      udp: status.udpCount || 0,
+      load1: (status.loads && status.loads[0]) || 0,
+    });
+    if (series.length > FLEET_WINDOW) state.series[server.id] = series.slice(-FLEET_WINDOW);
+  }
+
+  for (const id of Object.keys(state.series)) {
+    if (!seen.has(Number(id))) delete state.series[id];
+  }
+}
+
+function seriesFor(serverId) {
+  return state.series[serverId] || [];
+}
+
 function applyPayload(payload) {
   state.payload = payload;
   state.lastMessage = Date.now();
+  trackSeries(payload);
 
   const summary = payload.summary || {};
   const fleet = state.fleet;
@@ -372,7 +414,7 @@ function updateServerCard(card, server) {
 
   const chart = ref('chart', card);
   if (chart) {
-    const live = server.live || [];
+    const live = seriesFor(server.id);
     renderChart(chart, {
       height: 54,
       yMax: 100,
@@ -556,7 +598,7 @@ function updateDetail() {
   }
   setText('stateText', server.online ? t('online') : `${t('offline')} · ${relativeTime(server.lastSeen, t)}`);
 
-  const points = state.detail.points || server.live || [];
+  const points = state.detail.points || seriesFor(server.id);
   const labels = points.map((point) => formatClock(point.t));
   const series = (key) => points.map((point) => point[key] || 0);
 

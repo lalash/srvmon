@@ -101,8 +101,10 @@ func (h *Hub) Run(ctx context.Context) error {
 	return err
 }
 
-// broadcastLoop pushes the full dashboard payload to every open SSE stream on
-// the same cadence the agents report at.
+// broadcastLoop pushes the dashboard payload to every open SSE stream on the
+// same cadence the agents report at. It deliberately omits the rolling window:
+// the client is handed one at connect and extends it from each tick, so a
+// hundred-server fleet does not resend a hundred sparklines every two seconds.
 func (h *Hub) broadcastLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(h.cfg.PushInterval) * time.Second)
 	defer ticker.Stop()

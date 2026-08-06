@@ -55,9 +55,9 @@ type dashboardPayload struct {
 	Summary      summary      `json:"summary"`
 }
 
-// dashboard assembles the payload the overview renders from. withLive controls
-// whether each server carries its rolling sparkline window — the SSE stream
-// sends it too, so a tab that was in the background catches up in one message.
+// dashboard assembles the payload the overview renders from. withLive carries
+// each server's rolling sparkline window, which only the first payload a client
+// receives needs; see broadcastLoop for why later ticks leave it out.
 func (h *Hub) dashboard(withLive bool) dashboardPayload {
 	now := time.Now()
 	offlineAfter := h.offlineAfter()
