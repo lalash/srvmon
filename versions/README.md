@@ -37,11 +37,22 @@ bash scripts/snapshot-version.sh --list
 `vMAJOR.MINOR.PATCH`. Patch for fixes, minor for features that do not break an
 existing install, major for anything that needs manual steps on a running hub.
 
-## A note on the duplication
+## What a version actually costs
 
-These folders repeat the whole tree, so the repository grows by roughly its own
-size per version. The git tags alone already allow rollback, and
-`git checkout <tag>` costs nothing. The folders exist because a plain copy is
-easier to browse and compare than a tag, which is a fair trade at this size —
-but if the repository ever feels heavy, the folders can be deleted and the tags
-kept without losing any history.
+A snapshot holds only the source: `versions/` is excluded from the copy, so
+`versions/v1.1.0/` never contains `versions/v1.0.0/`. Nothing nests, and nothing
+grows exponentially.
+
+Measured on this repository, three versions in:
+
+| | |
+| --- | --- |
+| git object store, snapshot with no source change | +5 KB |
+| git object store, snapshot with one file changed | +4 KB |
+| checkout on disk, per version | +330 KB |
+
+The repository barely grows because git stores a blob once per distinct content,
+however many paths point at it — a new version only adds the directory listings.
+The working copy is what grows linearly, and at this size that is a rounding
+error. Should it ever matter, the folders can be deleted and the tags kept
+without losing any history.
