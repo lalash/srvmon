@@ -452,6 +452,7 @@ function mountDetail() {
     <div class="ov-bar">
       <button class="btn ghost small" data-ref="back">${icons.back} ${t('backToOverview')}</button>
       <h1 class="ov-title" data-ref="title">—</h1>
+      <button class="btn ghost small" data-ref="rename" title="${t('edit')}" aria-label="${t('edit')}">${icons.pencil}</button>
       <span class="ov-state" data-ref="statePill"><span class="ov-state-dot"></span><span data-ref="stateText"></span></span>
       <div class="ov-bar-actions">
         <div class="seg" data-ref="ranges">
@@ -560,6 +561,12 @@ function mountDetail() {
   </div>`;
 
   ref('back').addEventListener('click', () => { window.location.hash = '#/'; });
+  ref('rename').addEventListener('click', () => {
+    const server = serverById(state.route.id);
+    // The stream repaints the name within a tick anyway; refetching just makes
+    // it land the instant the dialog closes.
+    if (server) editServerDialog(server, () => api('/api/dashboard').then(applyPayload).catch(() => undefined));
+  });
   ref('ipToggle').addEventListener('click', () => {
     state.showIp = !state.showIp;
     ref('ipBox').classList.toggle('ip-hidden', !state.showIp);
@@ -836,7 +843,7 @@ function addServerDialog() {
   });
 }
 
-function editServerDialog(server) {
+function editServerDialog(server, onSaved = refreshServersTable) {
   const mask = openModal(`<h3>${t('editServer')}</h3>
     <div class="field"><label>${t('serverName')}</label>
       <input class="input" data-ref="name" value="${escapeHtml(server.name)}"></div>
@@ -865,7 +872,7 @@ function editServerDialog(server) {
       });
       mask.remove();
       toast(t('saved'), 'ok');
-      await refreshServersTable();
+      await onSaved();
     } catch (error) {
       toast(error.message, 'error');
     }

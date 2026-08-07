@@ -25,4 +25,5 @@ export const icons = {
   back: svg('<path d="M19 12H5M12 19l-7-7 7-7"/>'),
   refresh: svg('<path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/>'),
   cpuChip: svg('<rect x="4" y="4" width="16" height="16" rx="2"/>'),
+  pencil: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
 };
