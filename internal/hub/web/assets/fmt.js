@@ -54,7 +54,9 @@ export function formatSecond(seconds) {
   if (value < 3600) return `${(value / 60).toFixed(0)}m`;
   if (value < 86400) return `${(value / 3600).toFixed(0)}h`;
   const days = Math.floor(value / 86400);
-  const hours = Math.round(value / 3600 - days * 24);
+  // Rounding the leftover hours renders 23.6 as "28d 24h"; the hours part has
+  // to be floored for the same reason the days part is.
+  const hours = Math.floor(value / 3600) - days * 24;
   return `${days}d${hours > 0 ? ` ${hours}h` : ''}`;
 }
 
