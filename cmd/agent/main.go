@@ -22,7 +22,7 @@ import (
 	"srvmon/internal/metrics"
 )
 
-const agentVersion = "1.0.0"
+const agentVersion = "1.1.0"
 
 type config struct {
 	hub      string
