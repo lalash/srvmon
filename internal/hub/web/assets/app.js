@@ -278,7 +278,7 @@ function mountOverview() {
       ${tileMarkup('fdisk', icons.disk, t('avgStorage'))}
       ${tileMarkup('fnet', icons.network, t('throughput'))}
     </div>
-    <div class="srv-grid" data-ref="grid"></div>
+    <div class="srv-groups" data-ref="grid"></div>
   </div>`;
 }
 
@@ -370,27 +370,72 @@ function meterMarkup(key, label) {
   </div>`;
 }
 
-function syncServerCards(servers) {
-  const grid = ref('grid');
-  if (!grid) return;
+// Servers are grouped by their tag, untagged ones last. A fleet with no tags at
+// all renders as one plain grid — a lone "Ungrouped" heading is just noise.
+function groupsOf(servers) {
+  const byTag = new Map();
+  for (const server of servers) {
+    const tag = (server.tag || '').trim();
+    if (!byTag.has(tag)) byTag.set(tag, []);
+    byTag.get(tag).push(server);
+  }
+  return [...byTag.entries()].sort((a, b) => {
+    if (a[0] === b[0]) return 0;
+    if (!a[0]) return 1;
+    if (!b[0]) return -1;
+    return a[0].localeCompare(b[0]);
+  });
+}
 
-  const wanted = servers.map((server) => String(server.id)).join(',');
-  if (grid.dataset.keys !== wanted) {
-    grid.dataset.keys = wanted;
-    grid.innerHTML = servers.length
-      ? servers.map(serverCardMarkup).join('')
+function groupMarkup(tag, members, showHeading) {
+  const cards = `<div class="srv-grid">${members.map(serverCardMarkup).join('')}</div>`;
+  if (!showHeading) return cards;
+  return `<section class="srv-group">
+    <div class="srv-group-head">
+      <span class="srv-group-name">${escapeHtml(tag || t('ungrouped'))}</span>
+      <span class="srv-group-rule"></span>
+      <span class="srv-group-meta" data-ref="groupMeta-${escapeHtml(tag)}"></span>
+    </div>
+    ${cards}
+  </section>`;
+}
+
+function syncServerCards(servers) {
+  const host = ref('grid');
+  if (!host) return;
+
+  const groups = groupsOf(servers);
+  const showHeadings = groups.length > 1 || (groups.length === 1 && groups[0][0] !== '');
+  // The signature carries tags too, so moving a server between groups rebuilds.
+  const wanted = servers.map((server) => `${server.id}:${server.tag || ''}`).join(',');
+
+  if (host.dataset.keys !== wanted) {
+    host.dataset.keys = wanted;
+    host.innerHTML = servers.length
+      ? groups.map(([tag, members]) => groupMarkup(tag, members, showHeadings)).join('')
       : `<div class="card empty">${t('noServers')}</div>`;
-    grid.querySelectorAll('[data-card]').forEach((card) => {
+    host.querySelectorAll('[data-card]').forEach((card) => {
       card.addEventListener('click', () => {
         window.location.hash = `#/server/${card.dataset.card}`;
       });
     });
   }
 
-  for (const server of servers) {
-    const card = grid.querySelector(`[data-card="${server.id}"]`);
-    if (!card) continue;
-    updateServerCard(card, server);
+  for (const [tag, members] of groups) {
+    if (showHeadings) {
+      const online = members.filter((server) => server.online).length;
+      const up = members.reduce((sum, s) => sum + (s.status && s.online ? s.status.netIO.up : 0), 0);
+      const down = members.reduce((sum, s) => sum + (s.status && s.online ? s.status.netIO.down : 0), 0);
+      const meta = ref(`groupMeta-${tag}`, host);
+      if (meta) {
+        meta.textContent = `${t('onlineOf', { online, total: members.length })} · ↑ ${speedFormat(up)} ↓ ${speedFormat(down)}`;
+        meta.style.color = online < members.length ? 'var(--crit)' : '';
+      }
+    }
+    for (const server of members) {
+      const card = host.querySelector(`[data-card="${server.id}"]`);
+      if (card) updateServerCard(card, server);
+    }
   }
 }
 

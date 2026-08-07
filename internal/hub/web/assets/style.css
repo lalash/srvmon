@@ -565,6 +565,48 @@ a {
 
 /* — server grid — */
 
+.srv-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.srv-group-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding-inline: 2px;
+}
+
+.srv-group-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ov-label);
+  white-space: nowrap;
+}
+
+.srv-group-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+
+/* Under a group heading the card's own tag pill just repeats it. */
+.srv-group .srv-tag {
+  display: none;
+}
+
+.srv-group-meta {
+  font-size: 11.5px;
+  color: var(--ov-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  unicode-bidi: plaintext;
+}
+
 .srv-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
