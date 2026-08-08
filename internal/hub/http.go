@@ -26,6 +26,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/servers/{id}", h.requireAuth(h.handleUpdateServer))
 	mux.HandleFunc("DELETE /api/servers/{id}", h.requireAuth(h.handleDeleteServer))
 	mux.HandleFunc("POST /api/servers/{id}/token", h.requireAuth(h.handleRotateToken))
+	mux.HandleFunc("POST /api/servers/{id}/update", h.requireAuth(h.handleAgentUpdate))
 	mux.HandleFunc("GET /api/servers/{id}/history", h.requireAuth(h.handleHistory))
 	mux.HandleFunc("GET /api/settings", h.requireAuth(h.handleGetSettings))
 	mux.HandleFunc("POST /api/settings", h.requireAuth(h.handleSaveSettings))

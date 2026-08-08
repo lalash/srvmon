@@ -31,6 +31,7 @@ type serverView struct {
 	Token            string          `json:"token,omitempty"`
 	InstallCommand   string          `json:"installCommand,omitempty"`
 	UninstallCommand string          `json:"uninstallCommand,omitempty"`
+	UpdateTo       string            `json:"updateTo,omitempty"`
 	Status         *metrics.Snapshot `json:"status,omitempty"`
 	Live           []Sample          `json:"live,omitempty"`
 }
@@ -125,6 +126,7 @@ func viewOf(srv *Server, now time.Time, offlineAfter int64) serverView {
 		AgentVersion: srv.AgentVersion,
 		IPv4:         srv.IPv4,
 		IPv6:         srv.IPv6,
+		UpdateTo:     srv.UpdateTo,
 	}
 }
 
@@ -272,6 +274,31 @@ func (h *Hub) handleDeleteServer(w http.ResponseWriter, r *http.Request) {
 	h.live.Remove(id)
 	h.alerts.forget(id)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handleAgentUpdate asks one server — or every out-of-date server when the id
+// is "all" — to replace its agent binary on the next push.
+func (h *Hub) handleAgentUpdate(w http.ResponseWriter, r *http.Request) {
+	var id int64
+	if r.PathValue("id") != "all" {
+		parsed, err := pathID(r)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, apiError{Error: "invalid id"})
+			return
+		}
+		if _, err := h.store.GetServer(parsed); err != nil {
+			writeJSON(w, http.StatusNotFound, apiError{Error: "server not found"})
+			return
+		}
+		id = parsed
+	}
+
+	count, err := h.store.RequestAgentUpdate(id, Version)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"requested": count, "version": Version})
 }
 
 func (h *Hub) handleRotateToken(w http.ResponseWriter, r *http.Request) {

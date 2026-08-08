@@ -170,6 +170,15 @@ a {
   flex: 1;
 }
 
+.side-version {
+  padding: 10px 12px 2px;
+  font-size: 11px;
+  color: var(--ov-faint);
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid var(--line-soft);
+  margin-top: 6px;
+}
+
 .content-shell {
   flex: 1;
   min-width: 0;

@@ -56,7 +56,20 @@ func (h *Hub) handleAgentPush(w http.ResponseWriter, r *http.Request) {
 	h.maybePersist(server.ID, snap, now)
 	h.alerts.observe(server, snap, now)
 
-	writeJSON(w, http.StatusOK, map[string]int{"interval": h.cfg.PushInterval})
+	reply := map[string]any{"interval": h.cfg.PushInterval}
+	// The agent is told to update on every push until it reports the target
+	// version, so an update that failed halfway retries instead of going quiet.
+	if server.UpdateTo != "" {
+		if server.UpdateTo == snap.Agent {
+			if err := h.store.ClearAgentUpdate(server.ID); err != nil {
+				log.Printf("clear update flag for server %d: %v", server.ID, err)
+			}
+			log.Printf("server %q is now on agent %s", server.Name, snap.Agent)
+		} else {
+			reply["update"] = server.UpdateTo
+		}
+	}
+	writeJSON(w, http.StatusOK, reply)
 }
 
 // maybePersist writes at most one history row per SampleEvery seconds per

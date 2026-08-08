@@ -1,4 +1,4 @@
-// Command srvmon-agent samples the local host and pushes each snapshot to the
+﻿// Command srvmon-agent samples the local host and pushes each snapshot to the
 // central hub. It only ever makes outbound HTTPS calls, so it works behind NAT
 // and a closed firewall.
 package main
@@ -24,6 +24,9 @@ import (
 
 const agentVersion = "1.1.0"
 
+// updateRetryAfter bounds how often a failing self-update pulls the binary.
+const updateRetryAfter = 5 * time.Minute
+
 type config struct {
 	hub      string
 	token    string
@@ -39,7 +42,8 @@ type pushBody struct {
 }
 
 type pushReply struct {
-	Interval int `json:"interval"`
+	Interval int    `json:"interval"`
+	Update   string `json:"update,omitempty"`
 }
 
 func main() {
@@ -113,6 +117,7 @@ func run(client *http.Client, cfg config, collector *metrics.Collector) {
 	defer ticker.Stop()
 
 	failures := 0
+	var lastUpdateTry time.Time
 	for {
 		select {
 		case <-stop:
@@ -137,6 +142,20 @@ func run(client *http.Client, cfg config, collector *metrics.Collector) {
 				cfg.interval = want
 				ticker.Reset(want)
 				log.Printf("hub asked for a %s interval", want)
+			}
+			// The hub keeps asking until the new version reports in, so a failed
+			// update retries rather than stranding the host — but not on every
+			// push, or a hub serving a broken build would have every agent
+			// pulling the binary every couple of seconds.
+			if reply.Update != "" && reply.Update != agentVersion && time.Since(lastUpdateTry) > updateRetryAfter {
+				lastUpdateTry = time.Now()
+				log.Printf("hub asked for agent %s (running %s)", reply.Update, agentVersion)
+				if err := selfUpdate(client, cfg.hub, reply.Update); err != nil {
+					log.Printf("self-update failed, retrying in %s: %v", updateRetryAfter, err)
+					continue
+				}
+				log.Printf("updated to %s, restarting", reply.Update)
+				return
 			}
 		}
 	}
@@ -220,3 +239,7 @@ func overrideString(dst *string, value string) {
 		*dst = value
 	}
 }
+
+
+
+

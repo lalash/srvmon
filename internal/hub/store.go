@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -31,6 +33,10 @@ type Server struct {
 	AgentVersion string `json:"agentVersion"`
 	IPv4         string `json:"ipv4"`
 	IPv6         string `json:"ipv6"`
+	// UpdateTo is the agent version the operator asked this host to move to.
+	// It is handed to the agent on its next push and cleared once it reports
+	// having arrived, so a failed update keeps retrying rather than going quiet.
+	UpdateTo string `json:"updateTo"`
 }
 
 // Sample is one persisted history point; percentages are 0-100 and rates are
@@ -90,7 +96,8 @@ CREATE TABLE IF NOT EXISTS servers (
   kernel        TEXT NOT NULL DEFAULT '',
   agent_version TEXT NOT NULL DEFAULT '',
   ipv4          TEXT NOT NULL DEFAULT '',
-  ipv6          TEXT NOT NULL DEFAULT ''
+  ipv6          TEXT NOT NULL DEFAULT '',
+  update_to     TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS samples (
   server_id INTEGER NOT NULL,
@@ -138,19 +145,34 @@ func OpenStore(path string) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
+	migrate(db)
 	return &Store{db: db}, nil
+}
+
+// migrate adds columns to databases created by an earlier version. CREATE TABLE
+// IF NOT EXISTS leaves an existing table alone, so new columns need their own
+// statement; "duplicate column" just means this one already ran.
+func migrate(db *sql.DB) {
+	statements := []string{
+		`ALTER TABLE servers ADD COLUMN update_to TEXT NOT NULL DEFAULT ''`,
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(statement); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			log.Printf("migration %q: %v", statement, err)
+		}
+	}
 }
 
 // Close releases the database handle.
 func (s *Store) Close() error { return s.db.Close() }
 
 const serverColumns = `id, name, token, tag, sort, created_at, last_seen,
-	hostname, os, arch, kernel, agent_version, ipv4, ipv6`
+	hostname, os, arch, kernel, agent_version, ipv4, ipv6, update_to`
 
 func scanServer(row interface{ Scan(...any) error }) (*Server, error) {
 	var v Server
 	err := row.Scan(&v.ID, &v.Name, &v.Token, &v.Tag, &v.Sort, &v.CreatedAt, &v.LastSeen,
-		&v.Hostname, &v.OS, &v.Arch, &v.Kernel, &v.AgentVersion, &v.IPv4, &v.IPv6)
+		&v.Hostname, &v.OS, &v.Arch, &v.Kernel, &v.AgentVersion, &v.IPv4, &v.IPv6, &v.UpdateTo)
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +233,28 @@ func (s *Store) CreateServer(name, tag string) (*Server, error) {
 		return nil, err
 	}
 	return s.GetServer(id)
+}
+
+// RequestAgentUpdate marks servers whose agent should move to version. Passing
+// a single id targets one host; id 0 targets every host not already there.
+func (s *Store) RequestAgentUpdate(id int64, version string) (int64, error) {
+	var res sql.Result
+	var err error
+	if id > 0 {
+		res, err = s.db.Exec(`UPDATE servers SET update_to = ? WHERE id = ?`, version, id)
+	} else {
+		res, err = s.db.Exec(`UPDATE servers SET update_to = ? WHERE agent_version <> ?`, version, version)
+	}
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// ClearAgentUpdate is called once an agent reports the version it was sent to.
+func (s *Store) ClearAgentUpdate(id int64) error {
+	_, err := s.db.Exec(`UPDATE servers SET update_to = '' WHERE id = ?`, id)
+	return err
 }
 
 // UpdateServer changes the operator-editable fields.

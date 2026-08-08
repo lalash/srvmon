@@ -155,6 +155,9 @@ function applyPayload(payload) {
   state.lastMessage = Date.now();
   trackSeries(payload);
 
+  const version = document.getElementById('sideVersion');
+  if (version && payload.version) version.textContent = `v${payload.version}`;
+
   const summary = payload.summary || {};
   const fleet = state.fleet;
   fleet.cpu.push(summary.cpuAvg || 0);
@@ -784,6 +787,7 @@ async function mountServers() {
     <div class="ov-bar">
       <h1 class="ov-title">${t('servers')}</h1>
       <div class="ov-bar-actions">
+        <button class="btn" data-ref="updateAll">${icons.refresh} ${t('updateAllAgents')}</button>
         <button class="btn primary" data-ref="add">${icons.plus} ${t('addServer')}</button>
       </div>
     </div>
@@ -791,6 +795,9 @@ async function mountServers() {
   </div>`;
 
   ref('add').addEventListener('click', addServerDialog);
+  ref('updateAll').addEventListener('click', () => {
+    if (window.confirm(t('confirmUpdateAll', { version: hubVersion() }))) requestAgentUpdate('all', '');
+  });
   await refreshServersTable();
 }
 
@@ -823,12 +830,32 @@ async function refreshServersTable() {
       const id = Number(button.dataset.id);
       const server = data.servers.find((item) => item.id === id);
       if (!server) return;
+      if (button.dataset.action === 'agentUpdate') requestAgentUpdate(server.id, server.name);
       if (button.dataset.action === 'edit') editServerDialog(server);
       if (button.dataset.action === 'install') showInstallDialog(server);
       if (button.dataset.action === 'rotate') rotateToken(server);
       if (button.dataset.action === 'delete') deleteServer(server);
     });
   });
+}
+
+function hubVersion() {
+  return (state.payload && state.payload.version) || '';
+}
+
+function agentCell(server) {
+  const current = server.agentVersion || '—';
+  if (server.updateTo) {
+    return `<span class="pill" style="color:var(--warn)"><span class="dot"></span>${t('updating')} ${escapeHtml(server.updateTo)}</span>`;
+  }
+  const hub = hubVersion();
+  if (!hub || !server.agentVersion || server.agentVersion === hub) {
+    return escapeHtml(current);
+  }
+  return `${escapeHtml(current)}
+    <button class="btn small" data-action="agentUpdate" data-id="${server.id}" title="${t('updateTo', { version: hub })}">
+      ${icons.refresh} ${hub}
+    </button>`;
 }
 
 function serverRowMarkup(server) {
@@ -840,7 +867,7 @@ function serverRowMarkup(server) {
     </td>
     <td><span class="pill" style="color:${color}"><span class="dot"></span>${server.online ? t('online') : t('offline')}</span></td>
     <td dir="ltr">${formatDateTime(server.lastSeen)}</td>
-    <td dir="ltr">${escapeHtml(server.agentVersion || '—')}</td>
+    <td dir="ltr" style="white-space:nowrap">${agentCell(server)}</td>
     <td style="text-align:end;white-space:nowrap">
       <button class="btn small" data-action="edit" data-id="${server.id}">${t('edit')}</button>
       <button class="btn small" data-action="install" data-id="${server.id}">${t('installCommand')}</button>
@@ -886,6 +913,20 @@ function addServerDialog() {
       toast(error.message, 'error');
     }
   });
+}
+
+// The hub hands the instruction to the agent on its next push, so the table is
+// reloaded a moment later to show the request rather than the old version.
+async function requestAgentUpdate(id, name) {
+  try {
+    const data = await api(`/api/servers/${id}/update`, { method: 'POST' });
+    toast(name
+      ? t('updateQueuedOne', { name, version: data.version })
+      : t('updateQueuedAll', { count: data.requested, version: data.version }), 'ok');
+    setTimeout(refreshServersTable, 1500);
+  } catch (error) {
+    toast(error.message, 'error');
+  }
 }
 
 function editServerDialog(server, onSaved = refreshServersTable) {
