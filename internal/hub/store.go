@@ -166,6 +166,52 @@ func migrate(db *sql.DB) {
 // Close releases the database handle.
 func (s *Store) Close() error { return s.db.Close() }
 
+// BackupTo writes a consistent copy of the database to path. VACUUM INTO does
+// this without blocking writers, which copying the file cannot promise while
+// SQLite is mid-transaction.
+func (s *Store) BackupTo(path string) error {
+	_, err := s.db.Exec(`VACUUM INTO ?`, path)
+	return err
+}
+
+// BackupSummary is what an uploaded file has to look like to be accepted.
+type BackupSummary struct {
+	Servers int
+	Samples int
+	Users   int
+}
+
+// InspectBackup opens a candidate file read-only and confirms it is a srvmon
+// database. Restoring is destructive, so a wrong file has to be rejected before
+// the live database is touched rather than after.
+func InspectBackup(path string) (BackupSummary, error) {
+	var summary BackupSummary
+
+	db, err := sql.Open("sqlite", path+"?_pragma=query_only(1)")
+	if err != nil {
+		return summary, fmt.Errorf("not a readable database: %w", err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		return summary, fmt.Errorf("not a valid SQLite file: %w", err)
+	}
+	for _, table := range []string{"servers", "users", "settings", "samples"} {
+		var name string
+		err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&name)
+		if err != nil {
+			return summary, fmt.Errorf("this does not look like a srvmon backup: no %q table", table)
+		}
+	}
+
+	_ = db.QueryRow(`SELECT count(*) FROM servers`).Scan(&summary.Servers)
+	_ = db.QueryRow(`SELECT count(*) FROM samples`).Scan(&summary.Samples)
+	if err := db.QueryRow(`SELECT count(*) FROM users`).Scan(&summary.Users); err != nil || summary.Users == 0 {
+		return summary, fmt.Errorf("this backup has no operator accounts — restoring it would lock you out")
+	}
+	return summary, nil
+}
+
 const serverColumns = `id, name, token, tag, sort, created_at, last_seen,
 	hostname, os, arch, kernel, agent_version, ipv4, ipv6, update_to`
 

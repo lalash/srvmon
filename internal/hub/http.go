@@ -33,6 +33,8 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("POST /api/settings/telegram/test", h.requireAuth(h.handleTelegramTest))
 	mux.HandleFunc("GET /api/alerts", h.requireAuth(h.handleAlertEvents))
 	mux.HandleFunc("POST /api/account", h.requireAuth(h.handleAccount))
+	mux.HandleFunc("GET /api/backup", h.requireAuth(h.handleBackup))
+	mux.HandleFunc("POST /api/restore", h.requireAuth(h.handleRestore))
 
 	mux.Handle("/", h.staticHandler())
 

@@ -1111,6 +1111,19 @@ async function mountSettings() {
     </div>
 
     <div class="card card-pad">
+      <h2 class="section-title">${t('backup')}</h2>
+      <p class="section-sub">${t('backupSub')}</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn primary" data-ref="download">${icons.copy} ${t('downloadBackup')}</button>
+        <input type="file" accept=".db,application/octet-stream" data-ref="file" style="display:none">
+        <button class="btn" data-ref="pick">${t('chooseBackup')}</button>
+        <span class="ov-sub" data-ref="fileName"></span>
+        <button class="btn danger" data-ref="restore" disabled>${t('restoreBackup')}</button>
+      </div>
+      <p class="hint" style="margin-top:12px">${t('restoreWarning')}</p>
+    </div>
+
+    <div class="card card-pad">
       <h2 class="section-title">${t('account')}</h2>
       <p class="section-sub">${t('accountSub')}</p>
       <div class="form-grid">
@@ -1154,6 +1167,47 @@ async function mountSettings() {
     }
   });
   ref('saveAccount').addEventListener('click', saveAccount);
+  wireBackup();
+}
+
+function wireBackup() {
+  const file = ref('file');
+  const restore = ref('restore');
+
+  ref('download').addEventListener('click', () => {
+    // A plain navigation, so the browser handles the download and the
+    // Content-Disposition filename rather than buffering it in memory.
+    window.location.href = '/api/backup';
+  });
+
+  ref('pick').addEventListener('click', () => file.click());
+  file.addEventListener('change', () => {
+    const chosen = file.files[0];
+    setText('fileName', chosen ? chosen.name : '');
+    restore.disabled = !chosen;
+  });
+
+  restore.addEventListener('click', async () => {
+    const chosen = file.files[0];
+    if (!chosen || !window.confirm(t('confirmRestore', { name: chosen.name }))) return;
+
+    const body = new FormData();
+    body.append('backup', chosen);
+    restore.disabled = true;
+    try {
+      const response = await fetch('/api/restore', { method: 'POST', credentials: 'same-origin', body });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error((data && data.error) || response.statusText);
+
+      toast(t('restored', { servers: data.servers }), 'ok');
+      // The hub exits so its manager restarts it against the restored file;
+      // the reload lands on the login page once it is back.
+      setTimeout(() => { window.location.href = '/login'; }, 4000);
+    } catch (error) {
+      toast(error.message, 'error');
+      restore.disabled = false;
+    }
+  });
 }
 
 async function saveSettings() {
