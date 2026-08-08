@@ -2,36 +2,33 @@
 # Freezes the current tree as a named version:
 #
 #   bash scripts/snapshot-version.sh v1.1.0 "dark mode contrast, editable names"
+#   git push origin main --tags
 #
-# It writes versions/<tag>/ as a plain copy you can read or diff without git,
-# commits it, and tags the commit so GitHub carries the same version.
+# The copy lands OUTSIDE the repository — ../srvmon-versions/<tag>/ by default,
+# or wherever SRVMON_VERSIONS_DIR points — so releases never reach GitHub as
+# duplicated source. The git tag is what travels; the folder is a local
+# convenience for reading and diffing a release without git.
 #
 # To go back to one:  bash scripts/snapshot-version.sh --restore v1.1.0
 set -euo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$PWD"
+VERSIONS_DIR="${SRVMON_VERSIONS_DIR:-$(dirname "$REPO_ROOT")/srvmon-versions}"
 
-VERSIONS_DIR="versions"
-# Everything that is generated, local, or would make the snapshot recursive.
-EXCLUDES=(".git" "$VERSIONS_DIR" "bin" "node_modules" "*.db" "*.db-wal" "*.db-shm")
-
-red=$'\033[0;31m'; green=$'\033[0;32m'; yellow=$'\033[0;33m'; plain=$'\033[0m'
+red=$'\033[0;31m'; green=$'\033[0;32m'; blue=$'\033[0;34m'; plain=$'\033[0m'
 info() { echo -e "${green}==>${plain} $*"; }
 fail() { echo -e "${red}error:${plain} $*" >&2; exit 1; }
 
-copy_tree() {
-  local dest="$1" args=()
-  local pattern
-  for pattern in "${EXCLUDES[@]}"; do args+=(--exclude="$pattern"); done
-  if command -v rsync >/dev/null 2>&1; then
-    rsync -a "${args[@]}" ./ "$dest/"
-  else
-    # tar is everywhere rsync is not, and honours the same exclude patterns.
-    local tar_args=()
-    for pattern in "${EXCLUDES[@]}"; do tar_args+=(--exclude="$pattern"); done
-    mkdir -p "$dest"
-    tar -cf - "${tar_args[@]}" . | tar -xf - -C "$dest"
-  fi
+# git decides what belongs in a snapshot: anything it tracks. That keeps the
+# copy in step with .gitignore instead of maintaining a second exclude list.
+copy_tracked_files() {
+  local dest="$1" file
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    mkdir -p "$dest/$(dirname "$file")"
+    cp "$file" "$dest/$file"
+  done < <(git ls-files)
 }
 
 if [ "${1:-}" = "--restore" ]; then
@@ -41,24 +38,25 @@ if [ "${1:-}" = "--restore" ]; then
   [ -z "$(git status --porcelain)" ] || fail "working tree is dirty — commit or stash first"
 
   info "restoring $TAG over the working tree"
-  local_files=$(git ls-files | grep -v "^$VERSIONS_DIR/" || true)
-  # Delete tracked files first so a file that the snapshot does not have is
-  # actually removed, rather than surviving the copy.
-  echo "$local_files" | while read -r file; do [ -n "$file" ] && rm -f "$file"; done
+  # Delete tracked files first, so a file the snapshot does not have is removed
+  # rather than surviving the copy.
+  git ls-files -z | xargs -0 rm -f
   cp -r "$VERSIONS_DIR/$TAG/." .
+  rm -f VERSION.md
   git add -A
   info "restored. Review with 'git diff --cached', then commit."
   exit 0
 fi
 
 if [ "${1:-}" = "--list" ]; then
-  [ -d "$VERSIONS_DIR" ] || { echo "no versions yet"; exit 0; }
+  [ -d "$VERSIONS_DIR" ] || { echo "no versions yet at $VERSIONS_DIR"; exit 0; }
+  echo "in $VERSIONS_DIR:"
   for dir in "$VERSIONS_DIR"/*/; do
     [ -d "$dir" ] || continue
     tag="$(basename "$dir")"
     note=""
     [ -f "$dir/VERSION.md" ] && note="$(sed -n '3p' "$dir/VERSION.md")"
-    printf '%-12s %s\n' "$tag" "$note"
+    printf '  %-10s %s\n' "$tag" "$note"
   done
   exit 0
 fi
@@ -69,10 +67,11 @@ NOTE="${2:-}"
 [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "tag must look like v1.2.3"
 [ ! -d "$VERSIONS_DIR/$TAG" ] || fail "$VERSIONS_DIR/$TAG already exists"
 [ -z "$(git status --porcelain)" ] || fail "working tree is dirty — commit your changes first"
+git rev-parse "$TAG" >/dev/null 2>&1 && fail "tag $TAG already exists"
 
-info "snapshotting the tree into $VERSIONS_DIR/$TAG"
+info "copying the tree into $VERSIONS_DIR/$TAG"
 mkdir -p "$VERSIONS_DIR/$TAG"
-copy_tree "$VERSIONS_DIR/$TAG"
+copy_tracked_files "$VERSIONS_DIR/$TAG"
 
 cat > "$VERSIONS_DIR/$TAG/VERSION.md" <<EOF
 # $TAG
@@ -83,11 +82,10 @@ Frozen $(date -u +%Y-%m-%d) from commit $(git rev-parse --short HEAD).
 Restore with: bash scripts/snapshot-version.sh --restore $TAG
 EOF
 
-git add "$VERSIONS_DIR/$TAG"
-git commit -q -m "chore(release): snapshot $TAG
-
-${NOTE:-Frozen copy of the tree at this version.}"
+# The tag points at the commit that is already there — nothing is committed for
+# a release, so the repository does not grow by one copy of itself per version.
 git tag -a "$TAG" -m "${NOTE:-$TAG}"
 
-info "committed and tagged $TAG"
-echo "   push it with:  git push origin main --tags"
+info "tagged $TAG at $(git rev-parse --short HEAD)"
+echo "   local copy: $VERSIONS_DIR/$TAG"
+echo "   push it:    git push origin main --tags"

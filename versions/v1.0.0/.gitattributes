@@ -1,4 +1,0 @@
-# Shell scripts are fetched straight from GitHub and piped into bash on Linux;
-# a CRLF here becomes `bash: $'\r': command not found`.
-* text=auto eol=lf
-*.sh text eol=lf
