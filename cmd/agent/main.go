@@ -1,4 +1,4 @@
-﻿// Command srvmon-agent samples the local host and pushes each snapshot to the
+// Command srvmon-agent samples the local host and pushes each snapshot to the
 // central hub. It only ever makes outbound HTTPS calls, so it works behind NAT
 // and a closed firewall.
 package main
@@ -21,8 +21,6 @@ import (
 
 	"srvmon/internal/metrics"
 )
-
-const agentVersion = "1.1.0"
 
 // updateRetryAfter bounds how often a failing self-update pulls the binary.
 const updateRetryAfter = 5 * time.Minute
@@ -59,7 +57,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println("srvmon-agent", agentVersion)
+		fmt.Println("srvmon-agent", metrics.AgentVersion)
 		return
 	}
 
@@ -93,7 +91,7 @@ func main() {
 		client.Transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 	}
 
-	collector := metrics.NewCollector(agentVersion, cfg.diskPath)
+	collector := metrics.NewCollector(metrics.AgentVersion, cfg.diskPath)
 	collector.Collect() // prime the CPU and network deltas
 
 	if *once {
@@ -105,7 +103,7 @@ func main() {
 		return
 	}
 
-	log.Printf("srvmon-agent %s reporting to %s every %s as %q", agentVersion, cfg.hub, cfg.interval, cfg.name)
+	log.Printf("srvmon-agent %s reporting to %s every %s as %q", metrics.AgentVersion, cfg.hub, cfg.interval, cfg.name)
 	run(client, cfg, collector)
 }
 
@@ -147,9 +145,9 @@ func run(client *http.Client, cfg config, collector *metrics.Collector) {
 			// update retries rather than stranding the host — but not on every
 			// push, or a hub serving a broken build would have every agent
 			// pulling the binary every couple of seconds.
-			if reply.Update != "" && reply.Update != agentVersion && time.Since(lastUpdateTry) > updateRetryAfter {
+			if reply.Update != "" && reply.Update != metrics.AgentVersion && time.Since(lastUpdateTry) > updateRetryAfter {
 				lastUpdateTry = time.Now()
-				log.Printf("hub asked for agent %s (running %s)", reply.Update, agentVersion)
+				log.Printf("hub asked for agent %s (running %s)", reply.Update, metrics.AgentVersion)
 				if err := selfUpdate(client, cfg.hub, reply.Update); err != nil {
 					log.Printf("self-update failed, retrying in %s: %v", updateRetryAfter, err)
 					continue
@@ -174,7 +172,7 @@ func push(client *http.Client, cfg config, snap *metrics.Snapshot) (pushReply, e
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.token)
-	req.Header.Set("User-Agent", "srvmon-agent/"+agentVersion)
+	req.Header.Set("User-Agent", "srvmon-agent/"+metrics.AgentVersion)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -239,7 +237,3 @@ func overrideString(dst *string, value string) {
 		*dst = value
 	}
 }
-
-
-
-

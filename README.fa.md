@@ -136,6 +136,59 @@ bash install-hub.sh --ssl domain --domain monitor.example.com --port 443 --admin
 
 <div dir="rtl">
 
+### کدام نسخه نصب می‌شود
+
+اینستالر **آخرین ریلیز** را می‌گیرد، نه آخرین کامیت شاخه `main` — چون `main`
+جایی است که کار منتشرنشده می‌نشیند. برای نصب نسخه مشخص یا برگشت به عقب:
+
+</div>
+
+```bash
+bash install-hub.sh --version v1.1.0
+```
+
+<div dir="rtl">
+
+گزینه `--branch main` آخرین کامیت را نصب می‌کند؛ این را فقط وقتی بزنید که
+عمداً می‌خواهید کد در حال توسعه را داشته باشید.
+
+### نصب روی سروری که به اینترنت دسترسی ندارد
+
+سرور فقط برای گرفتن سورس به گیت‌هاب نیاز دارد. اگر دسترسی ندارد، ریلیز را روی
+یک ماشین دیگر دانلود کنید، منتقل کنید، و اینستالر را به آن اشاره دهید:
+
+</div>
+
+```bash
+# روی ماشینی که اینترنت دارد
+curl -fsSLO https://github.com/lalash/srvmon/archive/refs/tags/v1.1.0.tar.gz
+scp v1.1.0.tar.gz root@your-server:/root/
+
+# روی سرور
+tar -xzf /root/v1.1.0.tar.gz -C /root
+sudo bash /root/srvmon-1.1.0/scripts/install-hub.sh --source /root/srvmon-1.1.0
+```
+
+<div dir="rtl">
+
+گزینه `--source` دانلود را کاملاً حذف می‌کند؛ تنها تماس شبکه‌ای باقی‌مانده،
+دریافت Go است (اگر قبلاً نصب شده باشد لازم نیست) و Let's Encrypt در صورت
+انتخاب گواهی. با `--ssl none` و Go از قبل نصب‌شده، کل نصب آفلاین انجام می‌شود.
+
+روی هر ریلیز، باینری‌های از پیش ساخته‌شده `srvmon-hub` و `srvmon-agent` برای
+لینوکس amd64/arm64/arm هم هست. می‌توانید مستقیم بگذاریدشان و از بیلد صرف‌نظر
+کنید:
+
+</div>
+
+```bash
+sudo install -m 0755 srvmon-hub /usr/local/bin/srvmon-hub
+sudo mkdir -p /var/lib/srvmon/bin
+sudo install -m 0755 srvmon-agent-linux-* /var/lib/srvmon/bin/
+```
+
+<div dir="rtl">
+
 > حتماً `bash <(curl …)` استفاده کنید، نه `curl … | bash`. با پایپ، ورودی
 > استاندارد خودِ اسکریپت است، پس هیچ سؤالی نمی‌شود پرسید و هر گزینه‌ای که
 > ندهید بی‌صدا مقدار پیش‌فرضش را می‌گیرد. اسکریپت این حالت را تشخیص می‌دهد و

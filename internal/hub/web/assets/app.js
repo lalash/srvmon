@@ -796,7 +796,7 @@ async function mountServers() {
 
   ref('add').addEventListener('click', addServerDialog);
   ref('updateAll').addEventListener('click', () => {
-    if (window.confirm(t('confirmUpdateAll', { version: hubVersion() }))) requestAgentUpdate('all', '');
+    if (window.confirm(t('confirmUpdateAll', { version: shippedAgentVersion() }))) requestAgentUpdate('all', '');
   });
   await refreshServersTable();
 }
@@ -839,8 +839,10 @@ async function refreshServersTable() {
   });
 }
 
-function hubVersion() {
-  return (state.payload && state.payload.version) || '';
+// The agent has its own version: a dashboard-only release must not mark every
+// agent out of date. Compare against the build the hub ships, not the hub.
+function shippedAgentVersion() {
+  return (state.payload && state.payload.agentVersion) || '';
 }
 
 function agentCell(server) {
@@ -848,7 +850,7 @@ function agentCell(server) {
   if (server.updateTo) {
     return `<span class="pill" style="color:var(--warn)"><span class="dot"></span>${t('updating')} ${escapeHtml(server.updateTo)}</span>`;
   }
-  const hub = hubVersion();
+  const hub = shippedAgentVersion();
   if (!hub || !server.agentVersion || server.agentVersion === hub) {
     return escapeHtml(current);
   }

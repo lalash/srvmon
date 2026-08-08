@@ -12,7 +12,10 @@ set -euo pipefail
 
 GO_VERSION="1.24.5"
 REPO="lalash/srvmon"
-BRANCH="main"
+# Empty means "the newest release tag". main is where unreleased work lands, so
+# defaulting to it would install whatever was pushed minutes ago.
+VERSION=""
+BRANCH=""
 
 PORT=""
 SSL_MODE=""
@@ -50,8 +53,10 @@ Options (anything you leave out is asked interactively):
   --admin-password PASS  first operator password (default: generated)
   --base-url URL         override the URL baked into agent install commands
   --data-dir DIR         database and agent builds (default /var/lib/srvmon)
-  --source DIR           build from a local checkout instead of GitHub
-  --repo USER/NAME --branch NAME
+  --source DIR           build from a local checkout or an unpacked release
+  --version vX.Y.Z       install a specific release (default: the newest)
+  --branch NAME          install the tip of a branch instead of a release
+  --repo USER/NAME       install from a fork
   --open-firewall yes|no punch the port through ufw/firewalld
   --force-cert           reissue the certificate even if the current one is fine
   -y, --yes              accept every default, never prompt
@@ -74,6 +79,7 @@ while [ $# -gt 0 ]; do
     --data-dir) DATA_DIR="$2"; shift 2 ;;
     --source) SOURCE_DIR="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
+    --version) VERSION="$2"; shift 2 ;;
     --branch) BRANCH="$2"; shift 2 ;;
     --open-firewall) OPEN_FIREWALL="$2"; shift 2 ;;
     --force-cert) FORCE_CERT="1"; shift ;;
@@ -169,6 +175,15 @@ install_packages() {
     apk) apk add --quiet "$@" >/dev/null ;;
     *) warn "unknown package manager; make sure these are installed: $*" ;;
   esac
+}
+
+# The releases API needs no token for a public repository, and the tag list is
+# the fallback for when it is rate-limited.
+latest_release() {
+  curl -fsS --max-time 10 "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null |
+    sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1 ||
+    curl -fsS --max-time 10 "https://api.github.com/repos/$REPO/tags" 2>/dev/null |
+      sed -n 's/.*"name": *"\(v[0-9][^"]*\)".*/\1/p' | head -n 1
 }
 
 public_ip() {
@@ -276,10 +291,23 @@ if [ -z "$SOURCE_DIR" ]; then
   if [ -n "$here" ] && [ -f "$here/go.mod" ]; then
     SOURCE_DIR="$here"
   else
-    info "fetching $REPO ($BRANCH) into $SRC_DIR"
+    if [ -n "$BRANCH" ]; then
+      ref="refs/heads/$BRANCH"
+      label="branch $BRANCH"
+    else
+      if [ -z "$VERSION" ]; then
+        VERSION="$(latest_release)"
+        [ -n "$VERSION" ] || fail "could not find a release of $REPO; pass --version or --branch main"
+      fi
+      ref="refs/tags/$VERSION"
+      label="$VERSION"
+    fi
+
+    info "fetching $REPO $label into $SRC_DIR"
     rm -rf "$SRC_DIR"; mkdir -p "$SRC_DIR"
-    curl -fsSL "https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH" \
-      | tar -xz -C "$SRC_DIR" --strip-components=1
+    curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$ref" \
+      | tar -xz -C "$SRC_DIR" --strip-components=1 \
+      || fail "could not download $REPO $label — check the version exists"
     SOURCE_DIR="$SRC_DIR"
   fi
 fi

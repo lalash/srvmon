@@ -14,26 +14,26 @@ import (
 )
 
 type serverView struct {
-	ID             int64             `json:"id"`
-	Name           string            `json:"name"`
-	Tag            string            `json:"tag"`
-	Sort           int               `json:"sort"`
-	Online         bool              `json:"online"`
-	CreatedAt      int64             `json:"createdAt"`
-	LastSeen       int64             `json:"lastSeen"`
-	Hostname       string            `json:"hostname"`
-	OS             string            `json:"os"`
-	Arch           string            `json:"arch"`
-	Kernel         string            `json:"kernel"`
-	AgentVersion   string            `json:"agentVersion"`
-	IPv4           string            `json:"ipv4"`
-	IPv6           string            `json:"ipv6"`
-	Token            string          `json:"token,omitempty"`
-	InstallCommand   string          `json:"installCommand,omitempty"`
-	UninstallCommand string          `json:"uninstallCommand,omitempty"`
-	UpdateTo       string            `json:"updateTo,omitempty"`
-	Status         *metrics.Snapshot `json:"status,omitempty"`
-	Live           []Sample          `json:"live,omitempty"`
+	ID               int64             `json:"id"`
+	Name             string            `json:"name"`
+	Tag              string            `json:"tag"`
+	Sort             int               `json:"sort"`
+	Online           bool              `json:"online"`
+	CreatedAt        int64             `json:"createdAt"`
+	LastSeen         int64             `json:"lastSeen"`
+	Hostname         string            `json:"hostname"`
+	OS               string            `json:"os"`
+	Arch             string            `json:"arch"`
+	Kernel           string            `json:"kernel"`
+	AgentVersion     string            `json:"agentVersion"`
+	IPv4             string            `json:"ipv4"`
+	IPv6             string            `json:"ipv6"`
+	Token            string            `json:"token,omitempty"`
+	InstallCommand   string            `json:"installCommand,omitempty"`
+	UninstallCommand string            `json:"uninstallCommand,omitempty"`
+	UpdateTo         string            `json:"updateTo,omitempty"`
+	Status           *metrics.Snapshot `json:"status,omitempty"`
+	Live             []Sample          `json:"live,omitempty"`
 }
 
 type summary struct {
@@ -52,6 +52,7 @@ type summary struct {
 type dashboardPayload struct {
 	T            int64        `json:"t"`
 	Version      string       `json:"version"`
+	AgentVersion string       `json:"agentVersion"`
 	PushInterval int          `json:"pushInterval"`
 	Servers      []serverView `json:"servers"`
 	Summary      summary      `json:"summary"`
@@ -67,6 +68,7 @@ func (h *Hub) dashboard(withLive bool) dashboardPayload {
 	payload := dashboardPayload{
 		T:            now.Unix(),
 		Version:      Version,
+		AgentVersion: metrics.AgentVersion,
 		PushInterval: h.cfg.PushInterval,
 		Servers:      []serverView{},
 	}
@@ -293,12 +295,12 @@ func (h *Hub) handleAgentUpdate(w http.ResponseWriter, r *http.Request) {
 		id = parsed
 	}
 
-	count, err := h.store.RequestAgentUpdate(id, Version)
+	count, err := h.store.RequestAgentUpdate(id, metrics.AgentVersion)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, apiError{Error: err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"requested": count, "version": Version})
+	writeJSON(w, http.StatusOK, map[string]any{"requested": count, "version": metrics.AgentVersion})
 }
 
 func (h *Hub) handleRotateToken(w http.ResponseWriter, r *http.Request) {

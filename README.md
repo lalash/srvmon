@@ -110,6 +110,48 @@ Fully scripted, for example:
 bash install-hub.sh --ssl domain --domain monitor.example.com --port 443 --admin-password 'choose-something' --open-firewall yes
 ```
 
+### Which version gets installed
+
+The installer takes the **newest release**, not the tip of `main` — `main` is
+where unreleased work lands. To pin or roll back:
+
+```bash
+bash install-hub.sh --version v1.1.0
+```
+
+`--branch main` installs the latest commit instead, which is what you want only
+if you are following development.
+
+### Installing without internet access on the server
+
+The server needs GitHub only to fetch the source. If it cannot reach GitHub,
+download a release on a machine that can, copy it over, and point the installer
+at it:
+
+```bash
+# on a machine with internet
+curl -fsSLO https://github.com/lalash/srvmon/archive/refs/tags/v1.1.0.tar.gz
+scp v1.1.0.tar.gz root@your-server:/root/
+
+# on the server
+tar -xzf /root/v1.1.0.tar.gz -C /root
+sudo bash /root/srvmon-1.1.0/scripts/install-hub.sh --source /root/srvmon-1.1.0
+```
+
+`--source` skips the download entirely, so the only remaining network call is
+the Go toolchain — already present if you installed before, and Let's Encrypt
+if you choose a certificate. With `--ssl none` and Go already installed, the
+whole install is offline.
+
+Releases also carry prebuilt `srvmon-hub` and `srvmon-agent` binaries for
+linux amd64/arm64/arm. Drop them in and skip the build:
+
+```bash
+sudo install -m 0755 srvmon-hub /usr/local/bin/srvmon-hub
+sudo mkdir -p /var/lib/srvmon/bin
+sudo install -m 0755 srvmon-agent-linux-* /var/lib/srvmon/bin/
+```
+
 > Use `bash <(curl …)`, not `curl … | bash`. With a pipe, stdin is the script
 > itself, so nothing can be asked and every unset option silently takes its
 > default. The installer warns when it detects this.
