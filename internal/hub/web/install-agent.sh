@@ -118,7 +118,10 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now srvmon-agent
+systemctl enable srvmon-agent
+# restart, not `enable --now`: re-running this to upgrade leaves the unit
+# already active, where --now does nothing and the old binary keeps running.
+systemctl restart srvmon-agent
 sleep 2
 
 echo
