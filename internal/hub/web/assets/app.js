@@ -816,7 +816,9 @@ async function mountServerNotes() {
 
   ref('back').addEventListener('click', () => { window.location.hash = '#/'; });
 
-  let saved = '';
+  // What was last sent to the server, which is what "unchanged" is measured
+  // against — not what the server stored, since the two differ harmlessly.
+  let lastSent = '';
   let timer = null;
 
   const editor = createEditor(ref('editor'), {
@@ -831,19 +833,28 @@ async function mountServerNotes() {
   async function save() {
     clearTimeout(timer);
     const html = editor.html;
-    if (html === saved) return;
+    if (html === lastSent) return;
+
+    const previous = lastSent;
+    lastSent = html;
     setText('saveState', t('saving'));
     try {
       const data = await api(`/api/servers/${id}/note`, {
         method: 'PUT',
         body: JSON.stringify({ html }),
       });
-      // The server returns the sanitized note; adopting it means what is on
-      // screen is what is stored, rather than markup that was silently dropped.
-      if (data.html !== html) editor.html = data.html;
-      saved = data.html;
+      // The server's copy is adopted only when the caret is elsewhere. Assigning
+      // innerHTML rebuilds the editor's DOM and drops the caret back to the
+      // start, and the two versions differ over nothing visible — the sanitizer
+      // writes an apostrophe as &#39; — so mid-sentence it would scramble the
+      // text being typed for no gain.
+      if (!editor.hasFocus && data.html !== html) {
+        editor.html = data.html;
+        lastSent = data.html;
+      }
       setText('saveState', t('savedAt', { value: formatDateTime(data.updatedAt) }));
     } catch (error) {
+      lastSent = previous; // so the next attempt retries instead of going quiet
       setText('saveState', '');
       toast(error.message, 'error');
     }
@@ -855,7 +866,7 @@ async function mountServerNotes() {
   try {
     const note = await api(`/api/servers/${id}/note`);
     editor.html = note.html;
-    saved = note.html;
+    lastSent = note.html;
     setText('saveState', note.updatedAt
       ? t('savedAt', { value: formatDateTime(note.updatedAt) })
       : t('noNoteYet'));

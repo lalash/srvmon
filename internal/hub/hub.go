@@ -10,7 +10,7 @@ import (
 )
 
 // Version is reported by the dashboard and the /api/health endpoint.
-const Version = "1.3.0"
+const Version = "1.3.1"
 
 // Config is the hub's runtime configuration, assembled by cmd/hub.
 type Config struct {

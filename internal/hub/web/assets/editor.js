@@ -72,6 +72,9 @@ export function createEditor(host, options = {}) {
     focus() {
       body.focus();
     },
+    get hasFocus() {
+      return document.activeElement === body || body.contains(document.activeElement);
+    },
     get isEmpty() {
       return body.textContent.trim() === '' && !body.querySelector('img,hr');
     },
