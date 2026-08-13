@@ -1043,6 +1043,23 @@ textarea.input {
   box-shadow: var(--shadow);
 }
 
+/* The save indicator cycles through strings of very different lengths, and it
+   sits in a wrapping flex row. A fixed width keeps the row's wrap decision from
+   flipping with the text — otherwise the header collapses from two lines to one
+   on the short "Saving…" and the whole editor jumps up, then back. */
+.note-save-state {
+  width: 10.5rem;
+  flex: none;
+  text-align: end;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+  color: var(--ov-faint);
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: plaintext;
+}
+
 .ed-bar {
   display: flex;
   align-items: center;

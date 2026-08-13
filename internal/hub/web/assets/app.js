@@ -806,7 +806,7 @@ async function mountServerNotes() {
       <h1 class="ov-title">${escapeHtml(server ? server.name : '')}</h1>
       <div class="ov-bar-actions">
         ${serverTabsMarkup(id, 'notes')}
-        <span class="ov-sub" data-ref="saveState"></span>
+        <span class="note-save-state" data-ref="saveState"></span>
         <button class="btn primary" data-ref="save">${t('save')}</button>
       </div>
     </div>
