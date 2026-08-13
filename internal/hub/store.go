@@ -97,7 +97,9 @@ CREATE TABLE IF NOT EXISTS servers (
   agent_version TEXT NOT NULL DEFAULT '',
   ipv4          TEXT NOT NULL DEFAULT '',
   ipv6          TEXT NOT NULL DEFAULT '',
-  update_to     TEXT NOT NULL DEFAULT ''
+  update_to     TEXT NOT NULL DEFAULT '',
+  notes         TEXT NOT NULL DEFAULT '',
+  notes_at      INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS samples (
   server_id INTEGER NOT NULL,
@@ -155,6 +157,8 @@ func OpenStore(path string) (*Store, error) {
 func migrate(db *sql.DB) {
 	statements := []string{
 		`ALTER TABLE servers ADD COLUMN update_to TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE servers ADD COLUMN notes TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE servers ADD COLUMN notes_at INTEGER NOT NULL DEFAULT 0`,
 	}
 	for _, statement := range statements {
 		if _, err := db.Exec(statement); err != nil && !strings.Contains(err.Error(), "duplicate column") {
@@ -295,6 +299,72 @@ func (s *Store) RequestAgentUpdate(id int64, version string) (int64, error) {
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+// Note is an operator's write-up about a server: sanitized HTML plus when it
+// was last edited.
+type Note struct {
+	HTML      string `json:"html"`
+	UpdatedAt int64  `json:"updatedAt"`
+}
+
+// GetNote reads one server's note. Notes are fetched on demand rather than
+// carried in the dashboard payload, which goes to every open tab every tick.
+func (s *Store) GetNote(id int64) (Note, error) {
+	var note Note
+	err := s.db.QueryRow(`SELECT notes, notes_at FROM servers WHERE id = ?`, id).
+		Scan(&note.HTML, &note.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return note, ErrNotFound
+	}
+	return note, err
+}
+
+// SetNote stores an already-sanitized note.
+func (s *Store) SetNote(id int64, html string) (int64, error) {
+	now := time.Now().Unix()
+	res, err := s.db.Exec(`UPDATE servers SET notes = ?, notes_at = ? WHERE id = ?`, html, now, id)
+	if err != nil {
+		return 0, err
+	}
+	if affected, _ := res.RowsAffected(); affected == 0 {
+		return 0, ErrNotFound
+	}
+	return now, nil
+}
+
+// NoteHit is one server whose note matched a search.
+type NoteHit struct {
+	ServerID   int64  `json:"serverId"`
+	ServerName string `json:"serverName"`
+	Tag        string `json:"tag"`
+	UpdatedAt  int64  `json:"updatedAt"`
+	Excerpt    string `json:"excerpt"`
+}
+
+// NotesWithText returns every server that has a note, for searching. Matching
+// happens in Go against the note's plain text: SQL LIKE over the stored HTML
+// would match tag names and miss words split by formatting.
+func (s *Store) NotesWithText() ([]NoteHit, map[int64]string, error) {
+	rows, err := s.db.Query(`SELECT id, name, tag, notes, notes_at FROM servers
+		WHERE notes <> '' ORDER BY name`)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	var hits []NoteHit
+	bodies := map[int64]string{}
+	for rows.Next() {
+		var hit NoteHit
+		var body string
+		if err := rows.Scan(&hit.ServerID, &hit.ServerName, &hit.Tag, &body, &hit.UpdatedAt); err != nil {
+			return nil, nil, err
+		}
+		hits = append(hits, hit)
+		bodies[hit.ServerID] = body
+	}
+	return hits, bodies, rows.Err()
 }
 
 // ClearAgentUpdate is called once an agent reports the version it was sent to.

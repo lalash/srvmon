@@ -1022,6 +1022,183 @@ textarea.input {
   margin: 0 0 18px;
 }
 
+/* — notes editor — */
+
+.seg-link {
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12.5px;
+  padding: 4px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.seg-link.active {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.ed-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  border-radius: var(--radius) var(--radius) 0 0;
+  z-index: 2;
+}
+
+.ed-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ed-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.ed-btn:hover {
+  background: var(--line-soft);
+  color: var(--text);
+}
+
+.ed-btn:active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.ed-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--line-soft);
+  margin: 0 6px;
+}
+
+.ed-body {
+  padding: 22px var(--ov-pad) 28px;
+  min-height: 58vh;
+  outline: none;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* Blocks keep their own direction, so alignment has to follow the block rather
+   than the page — otherwise a Persian paragraph in an English panel sits left. */
+.ed-body [dir='rtl'] { text-align: right; }
+.ed-body [dir='ltr'] { text-align: left; }
+
+.ed-body:empty::before {
+  content: attr(data-placeholder);
+  color: var(--ov-faint);
+}
+
+.ed-body > *:first-child { margin-top: 0; }
+.ed-body > *:last-child { margin-bottom: 0; }
+
+.ed-body h2 { font-size: 20px; margin: 26px 0 10px; letter-spacing: -0.01em; }
+.ed-body h3 { font-size: 16.5px; margin: 22px 0 8px; }
+.ed-body p { margin: 0 0 12px; }
+.ed-body ul, .ed-body ol { margin: 0 0 12px; padding-inline-start: 24px; }
+.ed-body li { margin-bottom: 5px; }
+
+.ed-body a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ed-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 1px 5px;
+  direction: ltr;
+  unicode-bidi: embed;
+  display: inline-block;
+}
+
+.ed-body pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  direction: ltr;
+  text-align: left;
+}
+
+.ed-body blockquote {
+  margin: 0 0 12px;
+  padding-inline-start: 14px;
+  border-inline-start: 3px solid var(--line);
+  color: var(--text-2);
+}
+
+.ed-body hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 20px 0;
+}
+
+/* — note search — */
+
+.note-hit {
+  display: block;
+  padding: 16px var(--ov-pad);
+  margin-bottom: var(--ov-gap);
+  color: inherit;
+  text-decoration: none;
+}
+
+.note-hit-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.note-hit-excerpt {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text-2);
+  unicode-bidi: plaintext;
+}
+
+.note-hit-excerpt mark {
+  background: var(--primary-soft);
+  color: var(--text);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
 /* — modal & toast — */
 
 .mask {

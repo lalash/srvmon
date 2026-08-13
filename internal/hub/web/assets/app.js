@@ -1,4 +1,5 @@
 import { renderChart } from './chart.js';
+import { createEditor } from './editor.js';
 import { icons } from './icons.js';
 import { t, lang, setLang, applyDirection } from './i18n.js';
 import {
@@ -72,9 +73,9 @@ function isDark() {
 
 function parseRoute() {
   const hash = window.location.hash.replace(/^#\/?/, '');
-  const [name, id] = hash.split('/');
-  if (name === 'server' && id) return { name: 'server', id: Number(id) };
-  if (['servers', 'alerts', 'settings'].includes(name)) return { name, id: null };
+  const [name, id, section] = hash.split('/');
+  if (name === 'server' && id) return { name: 'server', id: Number(id), section: section || 'metrics' };
+  if (['servers', 'alerts', 'settings', 'notes'].includes(name)) return { name, id: null };
   return { name: 'overview', id: null };
 }
 
@@ -92,20 +93,32 @@ function navigate() {
 
 function render() {
   const route = state.route;
-  const needsMount = !state.mounted || state.mounted.name !== route.name || state.mounted.id !== route.id;
+  const needsMount = !state.mounted ||
+    state.mounted.name !== route.name ||
+    state.mounted.id !== route.id ||
+    state.mounted.section !== route.section;
 
   if (needsMount) {
-    state.mounted = { name: route.name, id: route.id };
+    state.mounted = { name: route.name, id: route.id, section: route.section };
     switch (route.name) {
-      case 'server': mountDetail(); break;
+      case 'server': route.section === 'notes' ? mountServerNotes() : mountDetail(); break;
       case 'servers': mountServers(); break;
       case 'alerts': mountAlerts(); break;
+      case 'notes': mountNoteSearch(); break;
       case 'settings': mountSettings(); break;
       default: mountOverview();
     }
   }
   if (route.name === 'overview') updateOverview();
-  if (route.name === 'server') updateDetail();
+  if (route.name === 'server' && route.section !== 'notes') updateDetail();
+}
+
+// The tab strip is shared by both server sections so the header does not jump
+// when you switch between them.
+function serverTabsMarkup(id, active) {
+  const tab = (key, label) =>
+    `<a class="seg-link${active === key ? ' active' : ''}" href="#/server/${id}${key === 'metrics' ? '' : '/' + key}">${label}</a>`;
+  return `<div class="seg">${tab('metrics', t('metricsTab'))}${tab('notes', t('notesTab'))}</div>`;
 }
 
 /* ---------- live data ---------- */
@@ -503,6 +516,7 @@ function mountDetail() {
       <button class="btn ghost small" data-ref="rename" title="${t('edit')}" aria-label="${t('edit')}">${icons.pencil}</button>
       <span class="ov-state" data-ref="statePill"><span class="ov-state-dot"></span><span data-ref="stateText"></span></span>
       <div class="ov-bar-actions">
+        ${serverTabsMarkup(state.route.id, 'metrics')}
         <div class="seg" data-ref="ranges">
           ${RANGES.map((range) => `<button data-range="${range}"${range === 'live' ? ' class="active"' : ''}>${range === 'live' ? t('rangeLive') : range}</button>`).join('')}
         </div>
@@ -778,6 +792,136 @@ function updateDetail() {
   setText('cpuSpec', status ? `${coreFormat(status.cpuCores)} · ${cpuSpeedFormat(status.cpuSpeedMhz)}` : '—');
   setText('ipv4', server.ipv4 || '—');
   setText('ipv6', server.ipv6 || '');
+}
+
+/* ---------- server notes ---------- */
+
+async function mountServerNotes() {
+  const id = state.route.id;
+  const server = serverById(id);
+
+  view.innerHTML = `<div class="ov-page">
+    <div class="ov-bar">
+      <button class="btn ghost small" data-ref="back">${icons.back} ${t('backToOverview')}</button>
+      <h1 class="ov-title">${escapeHtml(server ? server.name : '')}</h1>
+      <div class="ov-bar-actions">
+        ${serverTabsMarkup(id, 'notes')}
+        <span class="ov-sub" data-ref="saveState"></span>
+        <button class="btn primary" data-ref="save">${t('save')}</button>
+      </div>
+    </div>
+    <p class="ov-sub" style="margin:0">${t('notesHint')}</p>
+    <div class="card" data-ref="editor"></div>
+  </div>`;
+
+  ref('back').addEventListener('click', () => { window.location.hash = '#/'; });
+
+  let saved = '';
+  let timer = null;
+
+  const editor = createEditor(ref('editor'), {
+    placeholder: t('notesPlaceholder'),
+    onChange: () => {
+      setText('saveState', t('unsaved'));
+      clearTimeout(timer);
+      timer = setTimeout(save, 1200);
+    },
+  });
+
+  async function save() {
+    clearTimeout(timer);
+    const html = editor.html;
+    if (html === saved) return;
+    setText('saveState', t('saving'));
+    try {
+      const data = await api(`/api/servers/${id}/note`, {
+        method: 'PUT',
+        body: JSON.stringify({ html }),
+      });
+      // The server returns the sanitized note; adopting it means what is on
+      // screen is what is stored, rather than markup that was silently dropped.
+      if (data.html !== html) editor.html = data.html;
+      saved = data.html;
+      setText('saveState', t('savedAt', { value: formatDateTime(data.updatedAt) }));
+    } catch (error) {
+      setText('saveState', '');
+      toast(error.message, 'error');
+    }
+  }
+
+  ref('save').addEventListener('click', save);
+  editor.onBlur(save);
+
+  try {
+    const note = await api(`/api/servers/${id}/note`);
+    editor.html = note.html;
+    saved = note.html;
+    setText('saveState', note.updatedAt
+      ? t('savedAt', { value: formatDateTime(note.updatedAt) })
+      : t('noNoteYet'));
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+}
+
+/* ---------- note search ---------- */
+
+function mountNoteSearch() {
+  view.innerHTML = `<div class="ov-page">
+    <div class="ov-bar"><h1 class="ov-title">${t('searchNotes')}</h1></div>
+    <div class="card card-pad">
+      <input class="input" data-ref="q" dir="auto" placeholder="${t('searchNotesPlaceholder')}" autofocus>
+      <p class="hint" style="margin-top:8px">${t('searchNotesHint')}</p>
+    </div>
+    <div data-ref="results"></div>
+  </div>`;
+
+  const input = ref('q');
+  let timer = null;
+
+  const run = async () => {
+    const query = input.value.trim();
+    const results = ref('results');
+    if (!query) {
+      results.innerHTML = '';
+      return;
+    }
+    try {
+      const data = await api(`/api/notes/search?q=${encodeURIComponent(query)}`);
+      results.innerHTML = data.hits.length
+        ? data.hits.map((hit) => noteHitMarkup(hit, query)).join('')
+        : `<div class="card empty">${t('noMatches')}</div>`;
+    } catch (error) {
+      results.innerHTML = `<div class="card empty">${escapeHtml(error.message)}</div>`;
+    }
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(run, 250);
+  });
+  input.focus();
+}
+
+function noteHitMarkup(hit, query) {
+  return `<a class="card hoverable note-hit" href="#/server/${hit.serverId}/notes">
+    <div class="note-hit-head">
+      <span class="srv-name">${escapeHtml(hit.serverName)}</span>
+      ${hit.tag ? `<span class="srv-tag">${escapeHtml(hit.tag)}</span>` : ''}
+      <span class="srv-uptime">${formatDateTime(hit.updatedAt)}</span>
+    </div>
+    <div class="note-hit-excerpt" dir="auto">${highlight(hit.excerpt, query)}</div>
+  </a>`;
+}
+
+// The excerpt is plain text from the server; it is escaped here and only then
+// does the marker go in, so a note can never inject markup through a search.
+function highlight(text, query) {
+  const escaped = escapeHtml(text);
+  const needle = escapeHtml(query);
+  if (!needle) return escaped;
+  const pattern = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  return escaped.replace(pattern, (match) => `<mark>${match}</mark>`);
 }
 
 /* ---------- servers management ---------- */
@@ -1253,6 +1397,7 @@ function buildSidebar() {
   const items = [
     { route: 'overview', hash: '#/', icon: icons.network, label: t('overview') },
     { route: 'servers', hash: '#/servers', icon: icons.server, label: t('servers') },
+    { route: 'notes', hash: '#/notes', icon: icons.pencil, label: t('notes') },
     { route: 'alerts', hash: '#/alerts', icon: icons.bell, label: t('alerts') },
     { route: 'settings', hash: '#/settings', icon: icons.gear, label: t('settings') },
   ];
